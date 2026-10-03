@@ -70,7 +70,8 @@ function actionSpace(state: GameState): Action[] {
   ];
 }
 
-describe("random games", () => {
+// The first property to run generates every game, which can take several seconds on a slow runner.
+describe("random games", { timeout: 60_000 }, () => {
   it("end in every way a game can end", () => {
     // Guards the generator: if it stopped reaching an ending, the properties would stop covering it.
     const finals = Array.from({ length: 200 }, (_, seed) => randomGame(2, seed).states.at(-1)!);

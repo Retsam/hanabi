@@ -10,8 +10,7 @@ import { createGame, type GameState, type Seat } from "../state";
 export type CardName = string;
 
 export interface ScenarioSetup {
-  readonly players?: 2 | 3 | 4 | 5;
-  /** Each seat's hand, newest card (slot 1) first. */
+  /** Each seat's hand, newest card (slot 1) first. Their number sets the player count. */
   readonly hands: readonly (readonly CardName[])[];
   /**
    * The draw pile, next card first. When given, it is the whole draw pile and every card not
@@ -33,8 +32,11 @@ export function parseCard(config: GameConfig, name: CardName): Card {
 
 /** Starts a game whose hands and draw pile are exactly as described. */
 export function deal(setup: ScenarioSetup): Scenario {
-  const config = standardConfig(setup.players ?? 2);
-  if (setup.hands.length !== config.numPlayers) throw new Error("Wrong number of hands");
+  const players = setup.hands.length;
+  if (players !== 2 && players !== 3 && players !== 4 && players !== 5) {
+    throw new Error("Deal 2 to 5 hands");
+  }
+  const config = standardConfig(players);
 
   const remaining = orderedDeck(config);
   const take = (name: CardName): Card => {

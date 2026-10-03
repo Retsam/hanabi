@@ -121,7 +121,7 @@ type Action =
 ### Events
 
 `apply` returns a semantic event alongside the new state, for example
-`{ type: "play", cardId, card, success: false, strikes: 2 }`. Events reveal what the action uncovered
+`{ type: "play", seat, cardId, card, success: false, drawn }`. Events reveal what the action uncovered
 (the identity of a played or discarded card, which cards a clue touched). AIs observe events, and the UI
 animates them, so nobody has to diff states.
 

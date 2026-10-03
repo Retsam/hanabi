@@ -95,3 +95,9 @@ function assertDeckMatchesConfig(config: GameConfig, deck: readonly Card[]): voi
     throw new Error("Deck is too small to deal every hand");
   }
 }
+
+/** The current score: the sum of the play stacks, or 0 once the strikes are used up. */
+export function score(state: GameState): number {
+  if (state.strikes >= state.config.maxStrikes) return 0;
+  return state.config.suits.reduce((total, suit) => total + (state.stacks[suit] ?? 0), 0);
+}

@@ -1,0 +1,119 @@
+// A stacked-deck scenario builder for tests: deal exact hands, then step through actions by slot.
+import { produce } from "immer";
+import { type Action, apply, type Clue, type GameEvent } from "../actions";
+import { type Card, type CardId, RANKS, type Rank, type Suit } from "../card";
+import { type GameConfig, standardConfig } from "../config";
+import { orderedDeck } from "../deck";
+import { createGame, type GameState, type Seat } from "../state";
+
+/** Short card notation, like "r1" for a red 1: the suit's first letter, then the rank. */
+export type CardName = string;
+
+export interface ScenarioSetup {
+  readonly players?: 2 | 3 | 4 | 5;
+  /** Each seat's hand, newest card (slot 1) first. */
+  readonly hands: readonly (readonly CardName[])[];
+  /**
+   * The draw pile, next card first. When given, it is the whole draw pile and every card not
+   * named anywhere is put in the discard pile. When omitted, the rest of the deck is drawn in
+   * suit then rank order.
+   */
+  readonly drawPile?: readonly CardName[];
+  readonly stacks?: Readonly<Record<Suit, number>>;
+  readonly clueTokens?: number;
+  readonly strikes?: number;
+}
+
+export function parseCard(config: GameConfig, name: CardName): Card {
+  const suit = config.suits.find((s) => s[0] === name[0]);
+  const rank = RANKS.find((r) => r === Number(name.slice(1)));
+  if (suit === undefined || rank === undefined) throw new Error(`Bad card name ${name}`);
+  return { suit, rank };
+}
+
+/** Starts a game whose hands and draw pile are exactly as described. */
+export function deal(setup: ScenarioSetup): Scenario {
+  const config = standardConfig(setup.players ?? 2);
+  if (setup.hands.length !== config.numPlayers) throw new Error("Wrong number of hands");
+
+  const remaining = orderedDeck(config);
+  const take = (name: CardName): Card => {
+    const card = parseCard(config, name);
+    const i = remaining.findIndex((c) => c.suit === card.suit && c.rank === card.rank);
+    if (i === -1) throw new Error(`No ${name} left in the deck`);
+    return remaining.splice(i, 1)[0]!;
+  };
+
+  // createGame deals each hand oldest card first, so reverse each hand into the deck.
+  const dealt = setup.hands.flatMap((hand) => {
+    if (hand.length !== config.handSize) throw new Error(`Hands need ${config.handSize} cards`);
+    return hand.toReversed().map(take);
+  });
+  const drawn = (setup.drawPile ?? []).map(take);
+  const deck = [...dealt, ...drawn, ...remaining];
+  const extra = setup.drawPile === undefined ? 0 : remaining.length;
+
+  const state = produce(createGame(config, deck), (draft) => {
+    // Move the unnamed cards off the bottom of the draw pile into the discard pile.
+    draft.discardPile.push(...draft.drawPile.splice(draft.drawPile.length - extra, extra));
+    if (setup.stacks) Object.assign(draft.stacks, setup.stacks);
+    if (setup.clueTokens !== undefined) draft.clueTokens = setup.clueTokens;
+    if (setup.strikes !== undefined) draft.strikes = setup.strikes;
+  });
+  return new Scenario(state, []);
+}
+
+/** An immutable game in progress. Each action returns a new Scenario. */
+export class Scenario {
+  constructor(
+    readonly state: GameState,
+    /** Every event so far, oldest first. */
+    readonly events: readonly GameEvent[],
+  ) {}
+
+  /** The most recent event. */
+  get event(): GameEvent {
+    const event = this.events.at(-1);
+    if (event === undefined) throw new Error("No actions applied yet");
+    return event;
+  }
+
+  /** The id of the card in `slot` (0 is the newest) of `seat`'s hand, the current player's by default. */
+  cardAt(slot: number, seat: Seat = this.state.currentPlayer): CardId {
+    const id = this.state.hands[seat]?.[slot];
+    if (id === undefined) throw new Error(`Seat ${seat} has no slot ${slot}`);
+    return id;
+  }
+
+  /** Each seat's hand as card names, newest first. */
+  get hands(): CardName[][] {
+    return this.state.hands.map((hand) => hand.map((id) => this.name(id)));
+  }
+
+  name(id: CardId): CardName {
+    const { card } = this.state.cards[id]!;
+    return `${card.suit[0]}${card.rank}`;
+  }
+
+  do(action: Action): Scenario {
+    const { state, event } = apply(this.state, action);
+    return new Scenario(state, [...this.events, event]);
+  }
+
+  /** The current player plays the card in `slot`. */
+  play(slot: number): Scenario {
+    return this.do({ type: "play", cardId: this.cardAt(slot) });
+  }
+
+  /** The current player discards the card in `slot`. */
+  discard(slot: number): Scenario {
+    return this.do({ type: "discard", cardId: this.cardAt(slot) });
+  }
+
+  /** The current player clues `target` with a suit (a string) or a rank (a number). */
+  clue(target: Seat, value: Suit | Rank): Scenario {
+    const clue: Clue =
+      typeof value === "number" ? { kind: "rank", value } : { kind: "color", value };
+    return this.do({ type: "clue", target, clue });
+  }
+}

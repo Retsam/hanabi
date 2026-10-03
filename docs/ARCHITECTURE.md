@@ -20,7 +20,7 @@ Multiplayer between humans is out of scope.
 | Package manager   | pnpm workspaces                                      |
 | Type checking     | `tsc`, strict, plus `noUncheckedIndexedAccess`       |
 | Tests             | Vitest; fast-check for property tests                |
-| Lint / format     | oxlint / oxfmt                                       |
+| Lint / format     | oxlint (type-aware, via oxlint-tsgolint) / oxfmt     |
 | Immutable updates | Immer                                                |
 | Randomness        | `pure-rand` (seedable PRNG)                          |
 | CI                | GitHub Actions: typecheck, lint, format check, tests |

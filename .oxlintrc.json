@@ -5,5 +5,9 @@
     "correctness": "error",
     "suspicious": "warn"
   },
-  "ignorePatterns": ["node_modules", "dist", "coverage"]
+  "ignorePatterns": ["node_modules", "dist", "coverage"],
+  "rules": {
+    "typescript/no-unnecessary-condition": "error",
+    "typescript/no-floating-promises": "error"
+  }
 }

@@ -176,3 +176,7 @@ easy to add later. That converter is not part of the engine phase.
 - A "stacked deck" scenario builder, so tests read like `deal([...]).play(...).expect(...)`.
 - Property tests with fast-check: random legal games must preserve invariants (cards are conserved,
   clue tokens stay within 0 to 8, score never decreases, the game always terminates).
+- Name player seats in tests. A test file that refers to seats declares the names it uses at the top
+  (`const ALICE = 0`, `BOB = 1`, `CATHY = 2`, `DONALD = 3`, `EMILY = 4`) and uses them wherever a seat
+  is meant, e.g. `clue(BOB, 2)` or `cardAt(4, BOB)`. Hand slots and ranks stay numeric. The names are
+  file-local, not a shared export.

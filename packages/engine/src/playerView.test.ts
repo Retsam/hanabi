@@ -4,7 +4,6 @@ import { deal } from "./testing/scenario";
 
 // Three players. Seat 0 clues seat 1's 1s (touching only y1), seat 1 discards y5, seat 2 plays g1.
 const start = deal({
-  players: 3,
   hands: [
     ["r1", "r2", "r3", "r4", "r5"],
     ["y1", "y2", "y3", "y4", "y5"],

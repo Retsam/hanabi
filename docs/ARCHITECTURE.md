@@ -73,17 +73,18 @@ type Status = "playing" | "finalRound" | "over";
 
 `@hanabi/engine` exports exactly these, plus their types. Everything else is internal.
 
-| Export                      | Purpose                                                              |
-| --------------------------- | -------------------------------------------------------------------- |
-| `standardConfig(players)`   | The hanab.live base-game `GameConfig` for 2 to 5 players.            |
-| `RANKS`                     | The ranks 1 to 5, in order.                                          |
-| `shuffledDeck(config, rng)` | Produce a shuffled deck. Randomness lives here, outside the reducer. |
-| `createGame(config, deck)`  | Deal from a given deck and return the initial state.                 |
-| `apply(state, action)`      | Returns `{ state, event }`. Throws on an illegal action.             |
-| `validate(state, action)`   | Returns `null` if legal, otherwise a human-readable reason.          |
-| `legalActions(state)`       | All legal actions for the current player.                            |
-| `playerView(state, seat)`   | The projection of state that one seat is allowed to see.             |
-| `score(state)`              | Current score (0 after a strikeout).                                 |
+| Export                          | Purpose                                                               |
+| ------------------------------- | --------------------------------------------------------------------- |
+| `standardConfig(players)`       | The hanab.live base-game `GameConfig` for 2 to 5 players.             |
+| `RANKS`                         | The ranks 1 to 5, in order.                                           |
+| `shuffledDeck(config, rng)`     | Produce a shuffled deck. Randomness lives here, outside the reducer.  |
+| `createGame(config, deck)`      | Deal from a given deck and return the initial state.                  |
+| `apply(state, action)`          | Returns `{ state, event }`. Throws on an illegal action.              |
+| `validate(state, action)`       | Returns `null` if legal, otherwise a human-readable reason.           |
+| `legalActions(state)`           | All legal actions for the current player.                             |
+| `playerView(state, seat)`       | The projection of state that one seat is allowed to see.              |
+| `score(state)`                  | Current score (0 after a strikeout).                                  |
+| `replay(config, deck, actions)` | Every state and event of a recorded game. Throws naming the bad turn. |
 
 Illegal actions are programmer errors: the UI and AIs check legality first, so `apply` throws rather
 than returning a `Result`.
@@ -161,11 +162,17 @@ helper wraps simple synchronous AIs.
 The canonical replay format is the config, the dealt deck and the action list:
 
 ```ts
-type Replay = { config: GameConfig; deck: Card[]; actions: Action[] };
+interface Replay {
+  config: GameConfig;
+  deck: readonly Card[];
+  actions: readonly Action[];
+}
 ```
 
 Storing the deck (rather than only a seed) means replays survive changes to the PRNG. A seed can still
-be used to generate the deck. Replaying is `actions.reduce(apply, createGame(config, deck))`.
+be used to generate the deck. `replay(config, deck, actions)` deals the deck and applies each action,
+returning every intermediate state (so a viewer can scrub) and every event. Immer's structural sharing
+keeps the intermediate states cheap.
 
 The format is kept structurally close to hanab.live's JSON export so that an import/export converter is
 easy to add later. That converter is not part of the engine phase.
@@ -175,7 +182,9 @@ easy to add later. That converter is not part of the engine phase.
 - Unit tests for each rule.
 - A "stacked deck" scenario builder, so tests read like `deal([...]).play(...).expect(...)`.
 - Property tests with fast-check: random legal games must preserve invariants (cards are conserved,
-  clue tokens stay within 0 to 8, score never decreases, the game always terminates).
+  clue tokens stay within 0 to 8, score never decreases, the game always terminates, `validate` and
+  `legalActions` agree, views never leak hidden cards, replays reproduce the game). The random games
+  peek at the cards to pick plays, so they end in strikeouts, final rounds and perfect scores alike.
 - Name player seats in tests. A test file that refers to seats declares the names it uses at the top
   (`const ALICE = 0`, `BOB = 1`, `CATHY = 2`, `DONALD = 3`, `EMILY = 4`) and uses them wherever a seat
   is meant, e.g. `clue(BOB, 2)` or `cardAt(4, BOB)`. Hand slots and ranks stay numeric. The names are

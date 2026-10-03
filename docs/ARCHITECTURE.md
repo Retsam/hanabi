@@ -75,6 +75,8 @@ type Status = "playing" | "finalRound" | "over";
 
 | Export                      | Purpose                                                              |
 | --------------------------- | -------------------------------------------------------------------- |
+| `standardConfig(players)`   | The hanab.live base-game `GameConfig` for 2 to 5 players.            |
+| `RANKS`                     | The ranks 1 to 5, in order.                                          |
 | `shuffledDeck(config, rng)` | Produce a shuffled deck. Randomness lives here, outside the reducer. |
 | `createGame(config, deck)`  | Deal from a given deck and return the initial state.                 |
 | `apply(state, action)`      | Returns `{ state, event }`. Throws on an illegal action.             |
@@ -92,7 +94,8 @@ State is normalized and treated as immutable (updates go through Immer):
 
 - `cards`: a table keyed by card id. Each entry holds the card's identity (suit, rank) and its clue
   knowledge.
-- Hands, the draw pile and the discard pile are arrays of card ids.
+- Hands, the draw pile and the discard pile are arrays of card ids. Hands list the newest card first,
+  so index 0 is hanab.live's slot 1.
 - Play stacks are a count per suit.
 - Plus clue tokens, strikes, current player, turns remaining in the final round, and `status`.
 

@@ -3,6 +3,8 @@ import { standardConfig } from "./config";
 import { createGame } from "./state";
 import { orderedDeck } from "./deck";
 
+const ALICE = 0;
+
 describe("createGame", () => {
   it("deals five cards each with 2 or 3 players and four with 4 or 5", () => {
     for (const numPlayers of [2, 3, 4, 5] as const) {
@@ -43,7 +45,7 @@ describe("createGame", () => {
     expect(state).toMatchObject({
       clueTokens: 8,
       strikes: 0,
-      currentPlayer: 0,
+      currentPlayer: ALICE,
       turnsRemaining: null,
       turn: 0,
       status: "playing",

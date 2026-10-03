@@ -128,7 +128,9 @@ animates them, so nobody has to diff states.
 ### Hidden information
 
 `playerView(state, seat)` is a first-class projection: other players' cards are visible, the viewer's
-own cards have their identity blanked out, and clue knowledge is visible for all cards. AIs only ever
+own cards have their identity blanked out, and clue knowledge is visible for all cards. The draw pile
+is reduced to its size. Every card id still has an entry in `cards`, with `card: null` where its identity
+is hidden, so card ids index a view the same way they index state. AIs only ever
 receive a `PlayerView`, so they cannot cheat by construction. The UI renders the same projection for the
 human's seat.
 

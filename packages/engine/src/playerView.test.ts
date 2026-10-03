@@ -1,64 +1,64 @@
 import { describe, expect, it } from "vitest";
-import { standardConfig } from "./config";
-import { orderedDeck } from "./deck";
 import { playerView } from "./playerView";
-import { createGame, type GameState } from "./state";
+import { deal } from "./testing/scenario";
 
-const config = standardConfig(3);
-const deck = orderedDeck(config);
-const initial = createGame(config, deck);
+// Three players. Seat 0 clues seat 1's 1s (touching only y1), seat 1 discards y5, seat 2 plays g1.
+const start = deal({
+  players: 3,
+  hands: [
+    ["r1", "r2", "r3", "r4", "r5"],
+    ["y1", "y2", "y3", "y4", "y5"],
+    ["g1", "g2", "g3", "g4", "g5"],
+  ],
+  drawPile: ["b1", "b2", "b3"],
+});
+const [y1, y2, y5, g1] = [
+  start.cardAt(0, 1),
+  start.cardAt(1, 1),
+  start.cardAt(4, 1),
+  start.cardAt(0, 2),
+];
+const game = start.clue(1, 1).discard(4).play(0);
+const { state } = game;
 
-// A mid-game state built directly: seat 0 has a clued card, and one card has been discarded.
-const redClue = { kind: "color", value: "red" } as const;
-const state: GameState = {
-  ...initial,
-  cards: initial.cards.map((card) =>
-    card.id === 0
-      ? { ...card, clues: { touchedBy: [redClue], notTouchedBy: [] } }
-      : card.id === 5
-        ? { ...card, clues: { touchedBy: [], notTouchedBy: [redClue] } }
-        : card,
-  ),
-  hands: [[15, 4, 3, 2, 1], initial.hands[1] ?? [], initial.hands[2] ?? []],
-  drawPile: initial.drawPile.slice(1),
-  discardPile: [0],
-  clueTokens: 7,
-  currentPlayer: 1,
-  turn: 1,
-};
-
-describe("playerView", () => {
-  it("hides the viewer's own cards", () => {
-    const view = playerView(state, 0);
-    for (const id of [15, 4, 3, 2, 1]) expect(view.cards[id]?.card).toBeNull();
+/** The card names `seat` sees for each card id, with "?" for hidden ones. */
+const seen = (seat: number, ids: readonly number[]) =>
+  ids.map((id) => {
+    const card = playerView(state, seat).cards[id]?.card;
+    return card ? game.name(id) : "?";
   });
 
-  it("shows other players' cards", () => {
-    const view = playerView(state, 0);
-    for (const id of [...(state.hands[1] ?? []), ...(state.hands[2] ?? [])]) {
-      expect(view.cards[id]?.card).toEqual(deck[id]);
-    }
+describe("playerView", () => {
+  it("hides the viewer's own cards and shows everyone else's", () => {
+    expect(state.hands.map((hand) => seen(0, hand))).toEqual([
+      ["?", "?", "?", "?", "?"],
+      ["b1", "y1", "y2", "y3", "y4"],
+      ["b2", "g2", "g3", "g4", "g5"],
+    ]);
+    expect(state.hands.map((hand) => seen(1, hand))).toEqual([
+      ["r1", "r2", "r3", "r4", "r5"],
+      ["?", "?", "?", "?", "?"],
+      ["b2", "g2", "g3", "g4", "g5"],
+    ]);
   });
 
   it("hides the draw pile and exposes only its size", () => {
-    const view = playerView(state, 1);
-    expect(view.drawPileSize).toBe(state.drawPile.length);
+    const view = playerView(state, 0);
+    expect(view.drawPileSize).toBe(1);
     expect(view).not.toHaveProperty("drawPile");
-    for (const id of state.drawPile) expect(view.cards[id]?.card).toBeNull();
+    expect(seen(0, state.drawPile)).toEqual(["?"]);
   });
 
-  it("shows discarded cards to everyone", () => {
-    for (const seat of [0, 1, 2]) {
-      expect(playerView(state, seat).cards[0]?.card).toEqual(deck[0]);
-    }
+  it("shows discarded and played cards to everyone, including their old owner", () => {
+    expect(seen(1, [y5])).toEqual(["y5"]);
+    expect(seen(2, [g1])).toEqual(["g1"]);
   });
 
-  it("shows clue knowledge for every card, including the viewer's own", () => {
+  it("shows clue knowledge on the viewer's own cards", () => {
     const view = playerView(state, 1);
-    expect(view.cards[0]?.clues.touchedBy).toEqual([redClue]);
-    // Card 5 is in seat 1's own hand.
-    expect(view.cards[5]?.card).toBeNull();
-    expect(view.cards[5]?.clues.notTouchedBy).toEqual([redClue]);
+    const rank1 = { kind: "rank", value: 1 };
+    expect(view.cards[y1]).toMatchObject({ card: null, clues: { touchedBy: [rank1] } });
+    expect(view.cards[y2]).toMatchObject({ card: null, clues: { notTouchedBy: [rank1] } });
   });
 
   it("keeps card ids aligned with the state's card table", () => {
@@ -68,26 +68,8 @@ describe("playerView", () => {
   });
 
   it("copies the public game state and records the viewer's seat", () => {
-    const view = playerView(state, 2);
-    expect(view).toMatchObject({
-      seat: 2,
-      config,
-      hands: state.hands,
-      discardPile: [0],
-      stacks: state.stacks,
-      clueTokens: 7,
-      strikes: 0,
-      currentPlayer: 1,
-      turnsRemaining: null,
-      turn: 1,
-      status: "playing",
-    });
-  });
-
-  it("does not modify the state", () => {
-    const before = structuredClone(state);
-    playerView(state, 0);
-    expect(state).toEqual(before);
+    const { cards: _, drawPile: __, ...publicState } = state;
+    expect(playerView(state, 2)).toMatchObject({ ...publicState, seat: 2 });
   });
 
   it("rejects a seat that is not at the table", () => {

@@ -9,5 +9,8 @@
   "dependencies": {
     "immer": "^11.1.21",
     "pure-rand": "^8.4.2"
+  },
+  "devDependencies": {
+    "fast-check": "^4.10.2"
   }
 }

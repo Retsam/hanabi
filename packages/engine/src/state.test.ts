@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { standardConfig } from "./config";
-import { createGame } from "./createGame";
+import { createGame } from "./state";
 import { orderedDeck } from "./deck";
 
 describe("createGame", () => {

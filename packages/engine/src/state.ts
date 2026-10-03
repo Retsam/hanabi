@@ -1,5 +1,46 @@
+import type { Clue } from "./actions";
+import type { Card, CardId, Suit } from "./card";
+import type { GameConfig } from "./config";
 import { orderedDeck } from "./deck";
-import type { Card, CardId, CardState, GameConfig, GameState, Suit } from "./types";
+
+/** A player's position at the table, from 0 to `numPlayers - 1`. */
+export type Seat = number;
+
+/** The clues a card has been present for, split by whether the clue touched it. */
+export interface ClueKnowledge {
+  readonly touchedBy: readonly Clue[];
+  readonly notTouchedBy: readonly Clue[];
+}
+
+export interface CardState {
+  readonly id: CardId;
+  readonly card: Card;
+  readonly clues: ClueKnowledge;
+}
+
+export type Status = "playing" | "finalRound" | "over";
+
+export interface GameState {
+  readonly config: GameConfig;
+  /** Every card in the game, indexed by `CardId`. */
+  readonly cards: readonly CardState[];
+  /** Each seat's hand, newest card first (hanab.live's slot 1 is index 0). */
+  readonly hands: readonly (readonly CardId[])[];
+  /** The draw pile, next card to be drawn first. */
+  readonly drawPile: readonly CardId[];
+  /** The discard pile, in the order cards were discarded or misplayed. */
+  readonly discardPile: readonly CardId[];
+  /** The highest rank played on each suit's stack, or 0 if none. */
+  readonly stacks: Readonly<Record<Suit, number>>;
+  readonly clueTokens: number;
+  readonly strikes: number;
+  readonly currentPlayer: Seat;
+  /** Turns left once the draw pile is empty (status "finalRound"), otherwise null. */
+  readonly turnsRemaining: number | null;
+  /** How many actions have been applied so far. */
+  readonly turn: number;
+  readonly status: Status;
+}
 
 const cardKey = (card: Card) => `${card.suit} ${card.rank}`;
 

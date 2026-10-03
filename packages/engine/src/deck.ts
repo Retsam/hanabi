@@ -1,7 +1,7 @@
 import { uniformInt } from "pure-rand/distribution/uniformInt";
 import type { RandomGenerator } from "pure-rand/types/RandomGenerator";
-import { RANKS } from "./config";
-import type { Card, GameConfig } from "./types";
+import { type Card, RANKS } from "./card";
+import type { GameConfig } from "./config";
 
 /** Every card the config calls for, in suit then rank order. */
 export function orderedDeck(config: GameConfig): Card[] {

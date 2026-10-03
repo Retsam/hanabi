@@ -14,6 +14,19 @@ const start = () =>
   });
 
 describe("scenario builder", () => {
+  it("takes the player count from the hands", () => {
+    const game = deal({
+      hands: [
+        ["r1", "r2", "r3", "r4"],
+        ["y1", "y2", "y3", "y4"],
+        ["g1", "g2", "g3", "g4"],
+        ["b1", "b2", "b3", "b4"],
+      ],
+    });
+    expect(game.state.config.numPlayers).toBe(4);
+    expect(game.state.drawPile).toHaveLength(50 - 16);
+  });
+
   it("deals the hands and draw pile it was given", () => {
     const game = start();
     expect(game.hands).toEqual([

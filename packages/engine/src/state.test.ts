@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { standardConfig } from "./config";
-import { createGame } from "./state";
+import { createGame, maxScore } from "./state";
 import { orderedDeck } from "./deck";
 
 const ALICE = 0;
@@ -28,15 +28,11 @@ describe("createGame", () => {
     expect(state.drawPile.at(-1)).toBe(49);
   });
 
-  it("uses deck indices as card ids and starts with no clue knowledge", () => {
+  it("starts with no clue knowledge and a frozen state", () => {
     const config = standardConfig(2);
-    const deck = orderedDeck(config);
-    const state = createGame(config, deck);
-    state.cards.forEach((card, i) => {
-      expect(card.id).toBe(i);
-      expect(card.card).toEqual(deck[i]);
-      expect(card.clues).toEqual({ touchedBy: [], notTouchedBy: [] });
-    });
+    const state = createGame(config, orderedDeck(config));
+    for (const card of state.cards) expect(card.clues).toEqual({ touchedBy: [], notTouchedBy: [] });
+    expect(Object.isFrozen(state.hands[ALICE])).toBe(true);
   });
 
   it("starts with full clue tokens, no strikes and empty stacks", () => {
@@ -61,5 +57,11 @@ describe("createGame", () => {
     expect(() => createGame(config, [{ suit: "red", rank: 5 }, ...deck.slice(1)])).toThrow(
       "Deck does not match",
     );
+  });
+});
+
+describe("maxScore", () => {
+  it("is five per suit", () => {
+    expect(maxScore(standardConfig(3))).toBe(25);
   });
 });

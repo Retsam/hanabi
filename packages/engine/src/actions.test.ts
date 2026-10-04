@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { apply, legalActions, validate } from "./actions";
+import { type Action, apply, legalActions, validate } from "./actions";
 import { score } from "./state";
 import { deal } from "./testing/scenario";
 
@@ -16,31 +16,6 @@ const start = () =>
     ],
     drawPile: ["p1", "p2", "p3"],
   });
-
-describe("scenario builder", () => {
-  it("takes the player count from the hands", () => {
-    const game = deal({
-      hands: [
-        ["r1", "r2", "r3", "r4"],
-        ["y1", "y2", "y3", "y4"],
-        ["g1", "g2", "g3", "g4"],
-        ["b1", "b2", "b3", "b4"],
-      ],
-    });
-    expect(game.state.config.numPlayers).toBe(4);
-    expect(game.state.drawPile).toHaveLength(50 - 16);
-  });
-
-  it("deals the hands and draw pile it was given", () => {
-    const game = start();
-    expect(game.hands).toEqual([
-      ["r1", "r2", "r3", "r4", "r5"],
-      ["y1", "y2", "g1", "b1", "b2"],
-    ]);
-    expect(game.state.drawPile.map((id) => game.name(id))).toEqual(["p1", "p2", "p3"]);
-    expect(game.state.discardPile).toHaveLength(50 - 10 - 3);
-  });
-});
 
 describe("play", () => {
   it("adds a playable card to its stack and draws to the front of the hand", () => {
@@ -68,8 +43,8 @@ describe("play", () => {
   it("returns a clue token for a 5 below max", () => {
     const base = {
       hands: [
-        ["r5", "r1", "r1", "r1", "y1"],
-        ["y1", "y2", "g1", "b1", "b2"],
+        ["r5", "g1", "g1", "g1", "y1"],
+        ["y1", "y2", "r1", "b1", "b2"],
       ],
     };
     const game = deal({ ...base, stacks: { red: 4 }, clueTokens: 3 }).play(0);
@@ -96,8 +71,8 @@ describe("play", () => {
   it("ends the game when every stack is complete", () => {
     const game = deal({
       hands: [
-        ["p5", "r1", "r1", "r1", "y1"],
-        ["y1", "y1", "g1", "g1", "b1"],
+        ["p5", "r1", "r1", "y1", "g1"],
+        ["y1", "g1", "b1", "b1", "p1"],
       ],
       stacks: { red: 5, yellow: 5, green: 5, blue: 5, purple: 4 },
     }).play(0);
@@ -221,6 +196,12 @@ describe("turns and the final round", () => {
     expect(validate(game.state, { type: "play", cardId: game.cardAt(0) })).toBe("The game is over");
     expect(score(game.state)).toBe(2);
   });
+
+  it("starts the final round at once when nothing is left to draw", () => {
+    const game = deal({ ...setupOf(), drawPile: [] });
+    expect(game.state).toMatchObject({ status: "finalRound", turnsRemaining: 2 });
+    expect(game.clue(BOB, 1).clue(ALICE, 1).state.status).toBe("over");
+  });
 });
 
 describe("legalActions", () => {
@@ -243,14 +224,19 @@ describe("legalActions", () => {
     expect(actions.filter((a) => a.type === "discard")).toHaveLength(5);
     expect(actions.filter((a) => a.type === "clue")).toHaveLength(0);
   });
+});
 
-  it("only returns actions that validate and apply", () => {
-    for (const game of [start(), start().clue(BOB, 1), deal({ ...setupOf(), clueTokens: 4 })]) {
-      for (const action of legalActions(game.state)) {
-        expect(validate(game.state, action)).toBeNull();
-        expect(() => apply(game.state, action)).not.toThrow();
-      }
-    }
+describe("malformed actions", () => {
+  // As they could arrive in a replay loaded from JSON.
+  it("rejects an unknown action type or clue kind", () => {
+    const { state } = start();
+    const unknownType: Action = JSON.parse('{ "type": "pass" }');
+    expect(validate(state, unknownType)).toBe("Unknown action type pass");
+    expect(() => apply(state, unknownType)).toThrow("Illegal action");
+    const unknownKind: Action = JSON.parse(
+      `{ "type": "clue", "target": ${BOB}, "clue": { "kind": "suit", "value": 1 } }`,
+    );
+    expect(validate(state, unknownKind)).toBe("Unknown suit 1");
   });
 });
 

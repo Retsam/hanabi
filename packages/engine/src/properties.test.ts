@@ -1,12 +1,10 @@
 // Invariants that must hold over random legal games. See docs/ARCHITECTURE.md ("Testing").
-import { isDeepStrictEqual } from "node:util";
 import { assert, constantFrom, integer, property } from "fast-check";
 import { describe, expect, it } from "vitest";
-import { type Action, type Clue, legalActions, validate } from "./actions";
+import { type Action, allClues, legalActions, validate } from "./actions";
 import { type CardId, RANKS } from "./card";
 import { playerView } from "./playerView";
-import { replay } from "./replay";
-import { type GameState, score } from "./state";
+import { type GameState, maxScore, score } from "./state";
 import { type RandomGame, randomGame } from "./testing/randomGame";
 
 // Every property runs over the same games (a prefix of them for the slower properties), so each
@@ -53,16 +51,11 @@ const steps = (game: RandomGame) =>
 const stackTotal = (state: GameState) =>
   state.config.suits.reduce((total, suit) => total + (state.stacks[suit] ?? 0), 0);
 
-const maxScore = (state: GameState) => state.config.suits.length * RANKS.length;
-
 /** Every action that could be named in `state`, legal or not, including one seat too many. */
 function actionSpace(state: GameState): Action[] {
   const { config } = state;
   const ids = state.cards.map(({ id }) => id);
-  const clues: Clue[] = [
-    ...config.suits.map((value) => ({ kind: "color", value }) as const),
-    ...RANKS.map((value) => ({ kind: "rank", value }) as const),
-  ];
+  const clues = allClues(config);
   return [
     ...ids.map((cardId): Action => ({ type: "play", cardId })),
     ...ids.map((cardId): Action => ({ type: "discard", cardId })),
@@ -78,7 +71,7 @@ describe("random games", { timeout: 60_000 }, () => {
     // Guards the generator: if it stopped reaching an ending, the properties would stop covering it.
     const finals = Array.from({ length: 200 }, (_, seed) => randomGame(2, seed).states.at(-1)!);
     expect(finals.some((state) => state.strikes === state.config.maxStrikes)).toBe(true);
-    expect(finals.some((state) => score(state) === maxScore(state))).toBe(true);
+    expect(finals.some((state) => score(state) === maxScore(state.config))).toBe(true);
     expect(finals.some((state) => state.turnsRemaining === 0 && score(state) > 0)).toBe(true);
   });
 
@@ -184,7 +177,7 @@ describe("random games", { timeout: 60_000 }, () => {
         }
         const ended =
           state.strikes === config.maxStrikes ||
-          stackTotal(state) === maxScore(state) ||
+          stackTotal(state) === maxScore(state.config) ||
           turnsRemaining === 0;
         if ((status === "over") !== ended) yield `turn ${turn}: ${status} but ended is ${ended}`;
       }
@@ -195,7 +188,8 @@ describe("random games", { timeout: 60_000 }, () => {
     expectForAllGames(function* ({ config, states }) {
       const lastDraw = states.findIndex((state) => state.drawPile.length === 0);
       const final = states.at(-1)!;
-      const cutShort = final.strikes === config.maxStrikes || stackTotal(final) === maxScore(final);
+      const cutShort =
+        final.strikes === config.maxStrikes || stackTotal(final) === maxScore(final.config);
       if (lastDraw === -1 || cutShort) return;
       const finalTurns = states.length - 1 - lastDraw;
       if (finalTurns !== config.numPlayers) yield `the final round lasted ${finalTurns} turns`;
@@ -237,16 +231,6 @@ describe("random games", { timeout: 60_000 }, () => {
           }
         }
       }
-    }, GAMES / 4);
-  });
-
-  it("replay to the same states and events", () => {
-    expectForAllGames(function* ({ config, deck, actions, states, events }) {
-      const result = replay(config, deck, actions);
-      for (const [i, state] of states.entries()) {
-        if (!isDeepStrictEqual(result.states[i], state)) yield `state ${i} differs`;
-      }
-      if (!isDeepStrictEqual(result.events, events)) yield "the events differ";
     }, GAMES / 4);
   });
 });

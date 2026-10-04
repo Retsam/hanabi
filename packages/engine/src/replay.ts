@@ -24,14 +24,10 @@ export interface ReplayResult {
 }
 
 /**
- * Deals `deck` and applies `actions` in order, keeping every intermediate state. Throws if the deck
- * does not match the config or an action is illegal, naming the turn it happened on.
+ * Deals the replay's deck and applies its actions in order, keeping every intermediate state. Throws
+ * if the deck does not match the config or an action is illegal, naming the turn it happened on.
  */
-export function replay(
-  config: GameConfig,
-  deck: readonly Card[],
-  actions: readonly Action[],
-): ReplayResult {
+export function replay({ config, deck, actions }: Replay): ReplayResult {
   let state = createGame(config, deck);
   const states: GameState[] = [state];
   const events: GameEvent[] = [];

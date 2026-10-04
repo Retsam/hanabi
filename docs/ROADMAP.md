@@ -16,7 +16,7 @@ for the decisions these phases build on.
 - hanab.live base-game rules, including the final round and strikeout.
 - Clue knowledge (positive and negative) recorded on each card.
 - Semantic events returned from `apply`.
-- Replay type and `replay(config, deck, actions)`.
+- Replay type and `replay(record)`.
 - Tests: per-rule unit tests, the stacked-deck scenario builder, fast-check invariant tests.
 
 **Done when:** a complete game can be played and replayed through the public API, and the property tests

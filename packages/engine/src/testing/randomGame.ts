@@ -2,19 +2,13 @@
 import { uniformInt } from "pure-rand/distribution/uniformInt";
 import { xoroshiro128plus } from "pure-rand/generator/xoroshiro128plus";
 import { type Action, apply, type GameEvent, legalActions } from "../actions";
-import type { Card } from "../card";
-import { type GameConfig, standardConfig } from "../config";
+import { standardConfig } from "../config";
 import { shuffledDeck } from "../deck";
-import { createGame, type GameState } from "../state";
+import type { Replay, ReplayResult } from "../replay";
+import { createGame } from "../state";
 
-export interface RandomGame {
-  readonly config: GameConfig;
-  readonly deck: readonly Card[];
-  readonly actions: readonly Action[];
-  /** The initial state, then the state after each action. */
-  readonly states: readonly GameState[];
-  readonly events: readonly GameEvent[];
-}
+/** A random game's record, plus every state and event it went through. */
+export type RandomGame = Replay & ReplayResult;
 
 // Percent chances, picked once per game, of playing a playable card when there is one and of
 // playing a card without checking it.
@@ -24,7 +18,8 @@ const MISPLAY_CHANCES = [0, 2, 5, 20];
 /**
  * Plays a game to the end with random legal actions, using `seed` for both the deck and the moves.
  * Purely random moves would misplay their way to a strikeout within a dozen turns, so the moves
- * peek at the cards: each game has its own chances of playing a playable card and of a blind play. That way games end in all three ways: strikeouts, final rounds and (rarely) perfect scores.
+ * peek at the cards: each game has its own chances of playing a playable card and of a blind play.
+ * That way games end in all three ways: strikeouts, final rounds and (rarely) perfect scores.
  * Gives up after `maxTurns`, so a reducer bug that never ends the game fails the caller's checks
  * instead of hanging.
  */
@@ -66,5 +61,5 @@ export function randomGame(numPlayers: 2 | 3 | 4 | 5, seed: number, maxTurns = 1
     actions.push(action);
     events.push(result.event);
   }
-  return { config, deck, actions, states, events };
+  return { config, deck, actions, states, events, state };
 }

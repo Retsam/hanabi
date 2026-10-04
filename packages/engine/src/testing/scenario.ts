@@ -62,14 +62,16 @@ export function deal(setup: ScenarioSetup): Scenario {
     if (setup.clueTokens !== undefined) draft.clueTokens = setup.clueTokens;
     if (setup.strikes !== undefined) draft.strikes = setup.strikes;
   });
-  return new Scenario(state, []);
+  return new Scenario(state, [], []);
 }
 
 /** An immutable game in progress. Each action returns a new Scenario. */
 export class Scenario {
   constructor(
     readonly state: GameState,
-    /** Every event so far, oldest first. */
+    /** Every action applied so far, oldest first. */
+    readonly actions: readonly Action[],
+    /** The event each action produced. */
     readonly events: readonly GameEvent[],
   ) {}
 
@@ -99,7 +101,7 @@ export class Scenario {
 
   do(action: Action): Scenario {
     const { state, event } = apply(this.state, action);
-    return new Scenario(state, [...this.events, event]);
+    return new Scenario(state, [...this.actions, action], [...this.events, event]);
   }
 
   /** The current player plays the card in `slot`. */

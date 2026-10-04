@@ -12,7 +12,9 @@ import { type RandomGame, randomGame } from "./testing/randomGame";
 // Every property runs over the same games (a prefix of them for the slower properties), so each
 // game is only generated once. fast-check reports this seed with any failure.
 const FC_SEED = Date.now();
-const GAMES = 2000;
+// 200 games keep local runs around a second and still catch every reducer bug we have injected. CI
+// sets PROPERTY_GAMES to run thousands.
+const GAMES = Number(process.env.PROPERTY_GAMES ?? 200);
 
 const cache = new Map<string, RandomGame>();
 const gameFor = (numPlayers: 2 | 3 | 4 | 5, seed: number) => {
@@ -70,7 +72,7 @@ function actionSpace(state: GameState): Action[] {
   ];
 }
 
-// The first property to run generates every game, which can take several seconds on a slow runner.
+// The first property to run generates every game, which takes several seconds at CI's game count.
 describe("random games", { timeout: 60_000 }, () => {
   it("end in every way a game can end", () => {
     // Guards the generator: if it stopped reaching an ending, the properties would stop covering it.
@@ -214,7 +216,7 @@ describe("random games", { timeout: 60_000 }, () => {
           yield `turn ${state.turn}: ${legal.size} legal actions while ${state.status}`;
         }
       }
-    }, 300);
+    }, GAMES / 4);
   });
 
   it("never show a seat its own cards or the draw pile", () => {
@@ -235,7 +237,7 @@ describe("random games", { timeout: 60_000 }, () => {
           }
         }
       }
-    }, 500);
+    }, GAMES / 4);
   });
 
   it("replay to the same states and events", () => {
@@ -245,6 +247,6 @@ describe("random games", { timeout: 60_000 }, () => {
         if (!isDeepStrictEqual(result.states[i], state)) yield `state ${i} differs`;
       }
       if (!isDeepStrictEqual(result.events, events)) yield "the events differ";
-    }, 300);
+    }, GAMES / 4);
   });
 });

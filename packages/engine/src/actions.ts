@@ -1,7 +1,8 @@
 // Actions and the events `apply` returns. See docs/ARCHITECTURE.md ("Actions", "Events").
 import { produce } from "immer";
 import { type Card, type CardId, RANKS, type Rank, type Suit } from "./card";
-import type { GameState, Seat } from "./state";
+import type { GameConfig } from "./config";
+import { finalRound, type GameState, type Seat } from "./state";
 
 export type Clue =
   | { readonly kind: "color"; readonly value: Suit }
@@ -44,29 +45,49 @@ export function clueTouches(clue: Clue, card: Card): boolean {
   return clue.kind === "color" ? card.suit === clue.value : card.rank === clue.value;
 }
 
-/** Returns null if `action` is legal for the current player, otherwise why it is not. */
+/** Every clue the config allows: each color, then each rank. */
+export function allClues(config: GameConfig): Clue[] {
+  return [
+    ...config.suits.map((value) => ({ kind: "color", value }) as const),
+    ...RANKS.map((value) => ({ kind: "rank", value }) as const),
+  ];
+}
+
+/**
+ * Returns null if `action` is legal for the current player, otherwise why it is not. Checks the
+ * action's shape too, since replays and UI input may come from untyped JSON.
+ */
 export function validate(state: GameState, action: Action): string | null {
   if (state.status === "over") return "The game is over";
   const hand = currentHand(state);
-  if (action.type === "play") {
-    return hand.includes(action.cardId) ? null : `Card ${action.cardId} is not in your hand`;
+  switch (action.type) {
+    case "play":
+      return hand.includes(action.cardId) ? null : `Card ${action.cardId} is not in your hand`;
+    case "discard":
+      if (!hand.includes(action.cardId)) return `Card ${action.cardId} is not in your hand`;
+      if (state.clueTokens >= state.config.maxClueTokens) {
+        return "Cannot discard with full clue tokens";
+      }
+      return null;
+    case "clue":
+      return validateClue(state, action);
+    default:
+      return `Unknown action type ${String((action as { type: unknown }).type)}`;
   }
-  if (action.type === "discard") {
-    if (!hand.includes(action.cardId)) return `Card ${action.cardId} is not in your hand`;
-    if (state.clueTokens >= state.config.maxClueTokens) {
-      return "Cannot discard with full clue tokens";
-    }
-    return null;
-  }
+}
 
+function validateClue(
+  state: GameState,
+  { target, clue }: Action & { type: "clue" },
+): string | null {
   if (state.clueTokens <= 0) return "No clue tokens left";
-  const { target, clue } = action;
   if (!Number.isInteger(target) || target < 0 || target >= state.config.numPlayers) {
     return `There is no seat ${target}`;
   }
   if (target === state.currentPlayer) return "Cannot clue yourself";
   const known =
-    clue.kind === "color" ? state.config.suits.includes(clue.value) : RANKS.includes(clue.value);
+    (clue.kind === "color" && state.config.suits.includes(clue.value)) ||
+    (clue.kind === "rank" && RANKS.includes(clue.value));
   if (!known) return `Unknown ${clue.kind} ${clue.value}`;
   if (!handOf(state, target).some((id) => clueTouches(clue, cardOf(state, id)))) {
     return "A clue must touch at least one card";
@@ -140,8 +161,7 @@ export function apply(state: GameState, action: Action): { state: GameState; eve
     if (draft.turnsRemaining !== null) draft.turnsRemaining--;
     if (state.drawPile.length > 0 && draft.drawPile.length === 0) {
       // Everyone, including the player who drew the last card, gets one more turn.
-      draft.status = "finalRound";
-      draft.turnsRemaining = state.config.numPlayers;
+      Object.assign(draft, finalRound(state.config));
     }
 
     if (
@@ -165,10 +185,7 @@ export function legalActions(state: GameState): Action[] {
     for (const cardId of hand) actions.push({ type: "discard", cardId });
   }
   if (state.clueTokens > 0) {
-    const clues: Clue[] = [
-      ...state.config.suits.map((value) => ({ kind: "color", value }) as const),
-      ...RANKS.map((value) => ({ kind: "rank", value }) as const),
-    ];
+    const clues = allClues(state.config);
     for (let target = 0; target < state.config.numPlayers; target++) {
       if (target === state.currentPlayer) continue;
       const cards = handOf(state, target).map((id) => cardOf(state, id));

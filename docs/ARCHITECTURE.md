@@ -73,18 +73,19 @@ type Status = "playing" | "finalRound" | "over";
 
 `@hanabi/engine` exports exactly these, plus their types. Everything else is internal.
 
-| Export                          | Purpose                                                               |
-| ------------------------------- | --------------------------------------------------------------------- |
-| `standardConfig(players)`       | The hanab.live base-game `GameConfig` for 2 to 5 players.             |
-| `RANKS`                         | The ranks 1 to 5, in order.                                           |
-| `shuffledDeck(config, rng)`     | Produce a shuffled deck. Randomness lives here, outside the reducer.  |
-| `createGame(config, deck)`      | Deal from a given deck and return the initial state.                  |
-| `apply(state, action)`          | Returns `{ state, event }`. Throws on an illegal action.              |
-| `validate(state, action)`       | Returns `null` if legal, otherwise a human-readable reason.           |
-| `legalActions(state)`           | All legal actions for the current player.                             |
-| `playerView(state, seat)`       | The projection of state that one seat is allowed to see.              |
-| `score(state)`                  | Current score (0 after a strikeout).                                  |
-| `replay(config, deck, actions)` | Every state and event of a recorded game. Throws naming the bad turn. |
+| Export                      | Purpose                                                               |
+| --------------------------- | --------------------------------------------------------------------- |
+| `standardConfig(players)`   | The hanab.live base-game `GameConfig` for 2 to 5 players.             |
+| `RANKS`                     | The ranks 1 to 5, in order.                                           |
+| `shuffledDeck(config, rng)` | Produce a shuffled deck. Randomness lives here, outside the reducer.  |
+| `createGame(config, deck)`  | Deal from a given deck and return the initial state.                  |
+| `apply(state, action)`      | Returns `{ state, event }`. Throws on an illegal action.              |
+| `validate(state, action)`   | Returns `null` if legal, otherwise a human-readable reason.           |
+| `legalActions(state)`       | All legal actions for the current player.                             |
+| `playerView(state, seat)`   | The projection of state that one seat is allowed to see.              |
+| `score(state)`              | Current score (0 after a strikeout).                                  |
+| `maxScore(config)`          | The score with every stack complete.                                  |
+| `replay(record)`            | Every state and event of a recorded game. Throws naming the bad turn. |
 
 Illegal actions are programmer errors: the UI and AIs check legality first, so `apply` throws rather
 than returning a `Result`.
@@ -170,7 +171,7 @@ interface Replay {
 ```
 
 Storing the deck (rather than only a seed) means replays survive changes to the PRNG. A seed can still
-be used to generate the deck. `replay(config, deck, actions)` deals the deck and applies each action,
+be used to generate the deck. `replay(record)` deals the deck and applies each action,
 returning every intermediate state (so a viewer can scrub) and every event. Immer's structural sharing
 keeps the intermediate states cheap.
 
@@ -180,10 +181,12 @@ easy to add later. That converter is not part of the engine phase.
 ## Testing
 
 - Unit tests for each rule.
-- A "stacked deck" scenario builder, so tests read like `deal([...]).play(...).expect(...)`.
+- A "stacked deck" scenario builder, so tests read like
+  `deal({ hands, drawPile, stacks }).clue(BOB, 2).play(0)`. Cards on the given stacks are taken out of
+  the deck, so scenario states conserve cards like real ones.
 - Property tests with fast-check: random legal games must preserve invariants (cards are conserved,
   clue tokens stay within 0 to 8, score never decreases, the game always terminates, `validate` and
-  `legalActions` agree, views never leak hidden cards, replays reproduce the game). The random games
+  `legalActions` agree, views never leak hidden cards). The random games
   peek at the cards to pick plays, so they end in strikeouts, final rounds and perfect scores alike.
   Local runs use 200 games to stay fast; CI sets `PROPERTY_GAMES=2000`.
 - Name player seats in tests. A test file that refers to seats declares the names it uses at the top

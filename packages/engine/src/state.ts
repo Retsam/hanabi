@@ -1,5 +1,6 @@
+import { freeze } from "immer";
 import type { Clue } from "./actions";
-import type { Card, CardId, Suit } from "./card";
+import { type Card, type CardId, RANKS, type Suit } from "./card";
 import type { GameConfig } from "./config";
 import { orderedDeck } from "./deck";
 
@@ -69,21 +70,29 @@ export function createGame(config: GameConfig, deck: readonly Card[]): GameState
   const stacks: Record<Suit, number> = {};
   for (const suit of config.suits) stacks[suit] = 0;
 
-  return {
-    config,
-    cards,
-    hands,
-    drawPile,
-    discardPile: [],
-    stacks,
-    clueTokens: config.maxClueTokens,
-    strikes: 0,
-    currentPlayer: 0,
-    turnsRemaining: null,
-    turn: 0,
-    status: "playing",
-  };
+  // Frozen like every state `apply` returns, so views of it can't be used to change the game.
+  return freeze(
+    {
+      config,
+      cards,
+      hands,
+      drawPile,
+      discardPile: [],
+      stacks,
+      clueTokens: config.maxClueTokens,
+      strikes: 0,
+      currentPlayer: 0,
+      // If the hands use up the deck, the final round starts right away.
+      ...(drawPile.length === 0 ? finalRound(config) : { turnsRemaining: null, status: "playing" }),
+      turn: 0,
+    },
+    true,
+  );
 }
+
+/** The fields that start the final round: everyone gets one more turn. */
+export const finalRound = (config: GameConfig) =>
+  ({ status: "finalRound", turnsRemaining: config.numPlayers }) as const;
 
 function assertDeckMatchesConfig(config: GameConfig, deck: readonly Card[]): void {
   const expected = orderedDeck(config).map(cardKey).toSorted();
@@ -100,4 +109,9 @@ function assertDeckMatchesConfig(config: GameConfig, deck: readonly Card[]): voi
 export function score(state: GameState): number {
   if (state.strikes >= state.config.maxStrikes) return 0;
   return state.config.suits.reduce((total, suit) => total + (state.stacks[suit] ?? 0), 0);
+}
+
+/** The best possible score: every stack complete. */
+export function maxScore(config: GameConfig): number {
+  return config.suits.length * RANKS.length;
 }

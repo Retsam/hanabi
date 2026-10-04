@@ -10,6 +10,7 @@ export {
   type ClueKnowledge,
   createGame,
   type GameState,
+  maxScore,
   score,
   type Seat,
   type Status,

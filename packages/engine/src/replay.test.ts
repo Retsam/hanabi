@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Action, GameEvent } from "./actions";
+import type { Action } from "./actions";
 import { replay } from "./replay";
 import { createGame } from "./state";
 import { deal, type Scenario } from "./testing/scenario";
@@ -7,15 +7,9 @@ import { deal, type Scenario } from "./testing/scenario";
 const ALICE = 0;
 const BOB = 1;
 
-/** The action that produced each event, so a scenario can be replayed. */
-const actionOf = (event: GameEvent): Action =>
-  event.type === "clue"
-    ? { type: "clue", target: event.target, clue: event.clue }
-    : { type: event.type, cardId: event.cardId };
-
 /** The config, dealt deck and actions of a scenario. Card ids are deck indices. */
 const recordOf = (game: Scenario) =>
-  [game.state.config, game.state.cards.map(({ card }) => card), game.events.map(actionOf)] as const;
+  [game.state.config, game.state.cards.map(({ card }) => card), game.actions] as const;
 
 // No draw pile is given, so the scenario's start is exactly createGame on its deck.
 const start = () =>

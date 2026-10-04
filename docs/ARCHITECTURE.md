@@ -185,6 +185,7 @@ easy to add later. That converter is not part of the engine phase.
   clue tokens stay within 0 to 8, score never decreases, the game always terminates, `validate` and
   `legalActions` agree, views never leak hidden cards, replays reproduce the game). The random games
   peek at the cards to pick plays, so they end in strikeouts, final rounds and perfect scores alike.
+  Local runs use 200 games to stay fast; CI sets `PROPERTY_GAMES=2000`.
 - Name player seats in tests. A test file that refers to seats declares the names it uses at the top
   (`const ALICE = 0`, `BOB = 1`, `CATHY = 2`, `DONALD = 3`, `EMILY = 4`) and uses them wherever a seat
   is meant, e.g. `clue(BOB, 2)` or `cardAt(4, BOB)`. Hand slots and ranks stay numeric. The names are

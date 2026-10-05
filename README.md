@@ -5,6 +5,7 @@ for playing and replaying games.
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Roadmap](docs/ROADMAP.md)
+- [H-Group convention levels](docs/H-GROUP-LEVELS.md)
 
 ## Development
 

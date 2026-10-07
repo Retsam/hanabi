@@ -38,6 +38,7 @@ packages/
 apps/
   web/         (later)            play UI and replay viewer
 docs/
+  conventions/                    specs of the implemented H-Group conventions
 ```
 
 Packages are private and consumed as TypeScript source: each package's `exports` points at
@@ -214,8 +215,14 @@ Only H-Group is supported. There is no abstract "convention set" interface.
   out when every copy is visible or deduced for another of the viewer's cards, repeated until nothing
   changes. A property test checks that a card's real identity is always among its possibilities.
 - **Common knowledge:** what every player agrees each card could be once conventions are applied. It is
-  what lets the engine predict how a receiver will read a clue before suggesting it.
-- **Private knowledge:** what one seat can add to common knowledge from the cards it sees.
+  what lets the engine predict how a receiver will read a clue before suggesting it. `readGame(view,
+level)` builds it: `history(view)` rebuilds the public table before every event in the log, and each
+  clue is read (`readClue`) on the table it was given on. The same `readClue` predicts how a clue the
+  viewer is considering would be read.
+- **Private knowledge:** what one seat can add to common knowledge from the cards it sees
+  (`privateKnowledge`).
+- **Convention specs:** each implemented convention has a short spec in [conventions/](./conventions/),
+  with its source, its reading and the judgment calls made where H-Group leaves room.
 - **Pending interpretations:** a clue can have several readings (a prompt or a finesse, say). Each one
   is kept until later moves rule it out, so the review can say when an ambiguity was resolved.
 - **Off-convention moves:** a teammate's move that means nothing at the table's level contributes only

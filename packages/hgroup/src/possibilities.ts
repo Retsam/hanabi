@@ -18,8 +18,11 @@ export function identities(config: GameConfig): Card[] {
 /** How many copies of `card` the deck holds. */
 export const copies = (config: GameConfig, card: Card): number => config.rankCounts[card.rank];
 
-const matches = (card: Card, clue: Clue) =>
+/** Whether `clue` would touch a card with this identity. */
+export const clueMatches = (card: Card, clue: Clue): boolean =>
   clue.kind === "color" ? card.suit === clue.value : card.rank === clue.value;
+
+export const sameCard = (a: Card, b: Card): boolean => a.suit === b.suit && a.rank === b.rank;
 
 /**
  * The identities consistent with a card's clue knowledge alone: it matches every clue that touched
@@ -29,8 +32,8 @@ const matches = (card: Card, clue: Clue) =>
 export function cluePossibilities(config: GameConfig, clues: ClueKnowledge): Card[] {
   return identities(config).filter(
     (card) =>
-      clues.touchedBy.every((clue) => matches(card, clue)) &&
-      !clues.notTouchedBy.some((clue) => matches(card, clue)),
+      clues.touchedBy.every((clue) => clueMatches(card, clue)) &&
+      !clues.notTouchedBy.some((clue) => clueMatches(card, clue)),
   );
 }
 
@@ -40,8 +43,14 @@ export function cluePossibilities(config: GameConfig, clues: ClueKnowledge): Car
  * any identity whose every copy is already accounted for: visible somewhere, or deduced for
  * another of the viewer's cards. Deductions repeat until nothing changes, since pinning down one
  * card can pin down another. In suit then rank order.
+ *
+ * `start` replaces the clues as the starting point for each hidden card, so convention-based
+ * knowledge can be narrowed the same way. It must keep suit then rank order.
  */
-export function possibilities(view: PlayerView): (readonly Card[])[] {
+export function possibilities(
+  view: PlayerView,
+  start: (id: CardId) => readonly Card[] = cluesOf(view),
+): (readonly Card[])[] {
   const { config } = view;
   // Identities are handled by their index in `all`, which is also their sort order.
   const all = identities(config);
@@ -52,16 +61,16 @@ export function possibilities(view: PlayerView): (readonly Card[])[] {
   for (const { card } of view.cards) if (card !== null) accounted[indexOf(card)]!++;
 
   const result: (readonly Card[])[] = view.cards.map(({ card }) => (card === null ? [] : [card]));
-  // Clue-only candidates are shared between cards with the same clues, such as the whole draw pile.
-  const candidatesByClues = new Map<string, number[]>();
+  // Starting candidates are often shared, such as by the whole draw pile, so convert each list once.
+  const indices = new Map<readonly Card[], number[]>();
   const hidden = view.cards
     .filter(({ card }) => card === null)
-    .map(({ id, clues }) => {
-      const key = JSON.stringify(clues);
-      let candidates = candidatesByClues.get(key);
+    .map(({ id }) => {
+      const cards = start(id);
+      let candidates = indices.get(cards);
       if (candidates === undefined) {
-        candidates = cluePossibilities(config, clues).map(indexOf);
-        candidatesByClues.set(key, candidates);
+        candidates = cards.map(indexOf);
+        indices.set(cards, candidates);
       }
       return { id, candidates };
     });
@@ -91,4 +100,19 @@ export function possibilities(view: PlayerView): (readonly Card[])[] {
   }
   for (const [id, possible] of remaining) result[id] = possible.map((i) => all[i]!);
   return result;
+}
+
+/** Each card's clue possibilities, shared between cards with the same clues. */
+function cluesOf(view: PlayerView): (id: CardId) => readonly Card[] {
+  const byClues = new Map<string, Card[]>();
+  return (id) => {
+    const { clues } = view.cards[id]!;
+    const key = JSON.stringify(clues);
+    let cards = byClues.get(key);
+    if (cards === undefined) {
+      cards = cluePossibilities(view.config, clues);
+      byClues.set(key, cards);
+    }
+    return cards;
+  };
 }

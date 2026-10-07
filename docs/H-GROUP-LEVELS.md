@@ -77,6 +77,10 @@ headings that are only examples, website features or challenge questions are lef
 Source: [beginner's guide](https://hanabi.github.io/beginner) and [level 1](https://hanabi.github.io/level-1).
 Level 1 is everything in the beginner's guide; the level 1 page restates it with more precise definitions.
 
+Implemented so far: `chop`, `trash`, `clue-focus`, `good-touch`, `play-clue`, `delayed-play-clue`,
+`save-clue`, `5-save`, `2-save` and `critical-save` (reading clues). Specs:
+[conventions/level-1.md](./conventions/level-1.md).
+
 | ID                              | Convention                                                                                     | Kind        | Summary                                                                                                                                                      |
 | ------------------------------- | ---------------------------------------------------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `chop`                          | [The Chop](https://hanabi.github.io/level-1#the-chop)                                          | `term`      | A player's chop is the card they would discard next: their oldest (rightmost) unclued card. Known trash is discarded before chop.                            |

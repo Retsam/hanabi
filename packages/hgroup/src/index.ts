@@ -1,2 +1,21 @@
 // H-Group convention reading, card-possibility deduction and move ranking. See docs/ARCHITECTURE.md.
-export { cluePossibilities, copies, identities, possibilities } from "./possibilities";
+export {
+  clueMatches,
+  cluePossibilities,
+  copies,
+  identities,
+  possibilities,
+  sameCard,
+} from "./possibilities";
+export { applies, CONVENTION_LEVELS, type ConventionId, type Level } from "./conventions";
+export { history, type Moment } from "./history";
+export {
+  chop,
+  type ClueReading,
+  type GivenClue,
+  type Knowledge,
+  privateKnowledge,
+  readClue,
+  readGame,
+  type Table,
+} from "./knowledge";

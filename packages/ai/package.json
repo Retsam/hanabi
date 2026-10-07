@@ -8,6 +8,6 @@
   },
   "dependencies": {
     "@hanabi/engine": "workspace:*",
-    "@hanabi/inference": "workspace:*"
+    "@hanabi/hgroup": "workspace:*"
   }
 }

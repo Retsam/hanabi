@@ -1,5 +1,5 @@
 import { freeze } from "immer";
-import type { Clue } from "./actions";
+import type { Clue, GameEvent } from "./actions";
 import { type Card, type CardId, RANKS, type Suit } from "./card";
 import type { GameConfig } from "./config";
 import { orderedDeck } from "./deck";
@@ -41,6 +41,11 @@ export interface GameState {
   /** How many actions have been applied so far. */
   readonly turn: number;
   readonly status: Status;
+  /**
+   * The event of every action applied so far, oldest first. Events hold only public information, so
+   * the log is part of every `PlayerView`.
+   */
+  readonly log: readonly GameEvent[];
 }
 
 const cardKey = (card: Card) => `${card.suit} ${card.rank}`;
@@ -85,6 +90,7 @@ export function createGame(config: GameConfig, deck: readonly Card[]): GameState
       // If the hands use up the deck, the final round starts right away.
       ...(drawPile.length === 0 ? finalRound(config) : { turnsRemaining: null, status: "playing" }),
       turn: 0,
+      log: [],
     },
     true,
   );

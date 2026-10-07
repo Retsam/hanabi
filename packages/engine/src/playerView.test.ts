@@ -65,6 +65,16 @@ describe("playerView", () => {
     expect(view.cards[y2]).toMatchObject({ card: null, clues: { notTouchedBy: [rank1] } });
   });
 
+  it("carries the whole event log, the same for every seat", () => {
+    expect(playerView(state, ALICE).log).toEqual(game.events);
+    expect(playerView(state, BOB).log).toEqual(playerView(state, CATHY).log);
+    expect(playerView(state, ALICE).log.map((event) => event.type)).toEqual([
+      "clue",
+      "discard",
+      "play",
+    ]);
+  });
+
   it("keeps card ids aligned with the state's card table", () => {
     const view = playerView(state, CATHY);
     expect(view.cards).toHaveLength(state.cards.length);

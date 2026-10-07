@@ -1,7 +1,7 @@
 // Random legal games for property tests.
 import { uniformInt } from "pure-rand/distribution/uniformInt";
 import { xoroshiro128plus } from "pure-rand/generator/xoroshiro128plus";
-import { type Action, apply, type GameEvent, legalActions } from "../actions";
+import { type Action, apply, legalActions } from "../actions";
 import { standardConfig } from "../config";
 import { shuffledDeck } from "../deck";
 import type { Replay, ReplayResult } from "../replay";
@@ -34,7 +34,6 @@ export function randomGame(numPlayers: 2 | 3 | 4 | 5, seed: number, maxTurns = 1
   let state = createGame(config, deck);
   const states = [state];
   const actions: Action[] = [];
-  const events: GameEvent[] = [];
   while (state.status !== "over" && actions.length < maxTurns) {
     const legal = legalActions(state);
     const plays = legal.filter((action) => action.type === "play");
@@ -59,7 +58,6 @@ export function randomGame(numPlayers: 2 | 3 | 4 | 5, seed: number, maxTurns = 1
     state = result.state;
     states.push(state);
     actions.push(action);
-    events.push(result.event);
   }
-  return { config, deck, actions, states, events, state };
+  return { config, deck, actions, states, events: state.log, state };
 }

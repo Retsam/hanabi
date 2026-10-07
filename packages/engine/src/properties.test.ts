@@ -143,6 +143,9 @@ describe("random games", { timeout: 60_000 }, () => {
         if (event.seat !== before.currentPlayer || event.type !== action.type) {
           yield `turn ${before.turn}: event does not match the action`;
         }
+        if (after.log.length !== after.turn || before.log.some((e, i) => after.log[i] !== e)) {
+          yield `turn ${before.turn}: the log does not extend the previous one`;
+        }
       }
     });
   });

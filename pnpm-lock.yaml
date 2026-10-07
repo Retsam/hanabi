@@ -32,9 +32,9 @@ importers:
       '@hanabi/engine':
         specifier: workspace:*
         version: link:../engine
-      '@hanabi/inference':
+      '@hanabi/hgroup':
         specifier: workspace:*
-        version: link:../inference
+        version: link:../hgroup
 
   packages/engine:
     dependencies:
@@ -49,7 +49,7 @@ importers:
         specifier: ^4.10.2
         version: 4.10.2
 
-  packages/inference:
+  packages/hgroup:
     dependencies:
       '@hanabi/engine':
         specifier: workspace:*

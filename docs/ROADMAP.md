@@ -5,7 +5,8 @@ for the decisions these phases build on.
 
 ## Phase 0: Scaffold
 
-- pnpm workspace with `@hanabi/engine`, `@hanabi/inference` and `@hanabi/ai` packages.
+- pnpm workspace with `@hanabi/engine`, `@hanabi/inference` (since renamed `@hanabi/hgroup`) and `@hanabi/ai`
+  packages.
 - Strict TypeScript, Vitest, oxlint, oxfmt, and CI running all of them.
 - Architecture and roadmap docs.
 
@@ -22,15 +23,21 @@ for the decisions these phases build on.
 **Done when:** a complete game can be played and replayed through the public API, and the property tests
 pass over thousands of random games.
 
-## Phase 2: AI foundations
+## Phase 2: H-Group decision engine, level 1
 
-- `@hanabi/inference`: deduce each card's possible identities from clue knowledge and visible cards.
-- `@hanabi/ai`: the `SeatController` interface and a headless game runner.
-- A simple rule-based AI (for example: play known-playable, clue playable cards, discard oldest
-  unclued).
-- A CLI that simulates N games and reports the score distribution.
+The decision engine replaces the simple rule-based AI once planned here. See
+[the decision engine section](./ARCHITECTURE.md#decision-engine).
 
-**Done when:** the CLI can run thousands of AI games and report average scores.
+1. The event log in `PlayerView`; card-possibility deduction in `@hanabi/hgroup`.
+2. Common and private knowledge, chop, clue focus, Good Touch, play clues and save clues.
+3. Prompts and finesses, with pending interpretations.
+4. The ranked-move output, the H-Group seat controller, the headless game runner and the simulator CLI.
+5. `reviewGame`, printable from the CLI.
+
+Step 4 may move ahead of step 3 to watch games sooner.
+
+**Done when:** every level 1 convention has scenario tests from its H-Group examples and passes them.
+The simulator can run self-play games and report scores, but nothing gates on them.
 
 ## Phase 3: Web UI for play
 
@@ -44,10 +51,11 @@ pass over thousands of random games.
 - Inspect the game from any player's view.
 - Reuses the play UI's components.
 
-## Phase 5: Configurable AI conventions
+## Phase 5: Higher H-Group levels
 
-- Multiple AI strategies or convention sets, configurable per seat.
-- Compare strategies with the simulator CLI.
+- Add conventions level by level, following [H-GROUP-LEVELS.md](./H-GROUP-LEVELS.md), each with its
+  scenario tests.
+- Level selection in the UI.
 
 ## Later, unscheduled
 

@@ -6,7 +6,8 @@ any change that departs from it.
 ## Goals
 
 - A deterministic, well-tested rules engine for the base game of Hanabi.
-- AI players with configurable behavior, run headlessly or alongside a human.
+- An H-Group decision engine that ranks every move for a seat, usable both as an AI player and for
+  reviewing games, with the convention level configurable.
 - A web UI for playing single-player games (one human, AI teammates) and for replaying games.
 
 Multiplayer between humans is out of scope.
@@ -32,8 +33,8 @@ Dependencies are allowed but kept light. The engine must never depend on UI or A
 ```
 packages/
   engine/      @hanabi/engine     rules, state, actions, player views
-  inference/   @hanabi/inference  card-knowledge deduction (strategy, not rules)
-  ai/          @hanabi/ai         seat interface, game runner, AI players
+  hgroup/      @hanabi/hgroup     card deduction, H-Group convention reading, move ranking, game review
+  ai/          @hanabi/ai         seat interface, game runner, simulator CLI
 apps/
   web/         (later)            play UI and replay viewer
 docs/
@@ -43,7 +44,7 @@ Packages are private and consumed as TypeScript source: each package's `exports`
 `src/index.ts` and TypeScript uses `"moduleResolution": "bundler"`. There is no build step until the UI
 needs one.
 
-Dependency direction is one-way: `engine` ← `inference` ← `ai` ← `apps/web`.
+Dependency direction is one-way: `engine` ← `hgroup` ← `ai` ← `apps/web`.
 
 ## Rules
 
@@ -136,13 +137,17 @@ is hidden, so card ids index a view the same way they index state. AIs only ever
 receive a `PlayerView`, so they cannot cheat by construction. The UI renders the same projection for the
 human's seat.
 
+Conventions depend on the order of moves and who made them, so `PlayerView` will also carry the game's
+event log so far (Phase 2, step 1). Events already say which cards a clue touched and what a played or
+discarded card was, so nothing needs re-deriving.
+
 ### Clue knowledge
 
 The engine records only rules-level facts about each card: which clues touched it (positive
 information) and which clues it was present for but not touched by (negative information).
 
 Deduction beyond that (for example "this can't be a red 3, both are visible") is strategy, not rules,
-and lives in `@hanabi/inference`, which AIs and the UI opt into.
+and lives in `@hanabi/hgroup`, which AIs and the UI opt into.
 
 ## Seats and AIs
 
@@ -156,7 +161,67 @@ interface SeatController {
 ```
 
 A human seat is a promise the UI resolves. Async also leaves room for running AIs in a Web Worker. A
-helper wraps simple synchronous AIs.
+helper wraps simple synchronous AIs. The only AI is the H-Group decision engine below: its seat
+controller plays the top-ranked move. There is no separate simple rule-based AI.
+
+## Decision engine
+
+`@hanabi/hgroup` follows the [H-Group conventions](https://hanabi.github.io/). It is built for analysis
+as much as for play: given a view, it judges every legal move rather than picking one.
+[H-GROUP-LEVELS.md](./H-GROUP-LEVELS.md) lists the conventions per level, each with a stable id.
+
+### Inputs and output
+
+- **Input:** a `PlayerView` (including its event log) and the table's convention level. The call is
+  stateless: a pure function replays the log to rebuild convention state. Caching can come later if it
+  is slow.
+- **Output:** every legal move, each with a category (`mandated`, `permitted` or `violates`), a score
+  and structured reasons. Moves rank by category first, then by score. The score is a heuristic that only
+  orders moves within one decision; it is not comparable across turns.
+- **Reasons** name a convention id and the cards involved, for example a play clue on Bob's red 3 that
+  finesses Cathy's slot 1. `hgroup` also renders each reason as a default English sentence, for the CLI
+  and the review output. The UI may render the structured form itself.
+- **Deterministic:** the same view and level always give the same ranked list, with ties broken in a
+  fixed order. A seat controller may add randomness later if self-play wants variety.
+
+A move is judged from the acting player's view only: what they could know at the time. A hindsight mode
+that compares against the hidden cards may be layered on later.
+
+### Levels
+
+There is one level for the whole table; mixed-level tables are out of scope (the goal is practice, not
+modelling mismatched teammates). A convention applies when its level is at or below the table's level.
+Below that, a move that would be the convention is not one: the engine does not suggest it and does not
+read a teammate's move as it. Overrides, where a later level changes an earlier meaning, are keyed by
+level the same way. Implementation starts at level 1 and adds levels one at a time.
+
+Only H-Group is supported. There is no abstract "convention set" interface.
+
+### Knowledge model
+
+- **Card possibilities:** rules-level deduction of each card's possible identities from clue knowledge
+  and visible cards. It is a module of `hgroup` with no convention logic in it, so the UI can show what
+  a card could be and the review can contrast "the rules say" with "the conventions say". It can be
+  split into its own package later.
+- **Common knowledge:** what every player agrees each card could be once conventions are applied. It is
+  what lets the engine predict how a receiver will read a clue before suggesting it.
+- **Private knowledge:** what one seat can add to common knowledge from the cards it sees.
+- **Pending interpretations:** a clue can have several readings (a prompt or a finesse, say). Each one
+  is kept until later moves rule it out, so the review can say when an ambiguity was resolved.
+- **Off-convention moves:** a teammate's move that means nothing at the table's level contributes only
+  its rules-level information, and the review flags it. Mistake-recovery conventions (such as the Wrong
+  Prompt) arrive as ordinary convention rules at their own levels.
+
+### Approach
+
+Convention rules are hand-written: they generate candidate moves, classify them and give reasons, and
+heuristics score them. Search or simulation may later re-rank the permitted moves without changing the
+output shape.
+
+### Game review
+
+`reviewGame(replay, level)` evaluates every turn from the acting player's view and reports where the move
+actually made landed: its category, its rank and the top alternative. The simulator CLI can print it.
 
 ## Replays
 
@@ -193,3 +258,6 @@ easy to add later. That converter is not part of the engine phase.
   (`const ALICE = 0`, `BOB = 1`, `CATHY = 2`, `DONALD = 3`, `EMILY = 4`) and uses them wherever a seat
   is meant, e.g. `clue(BOB, 2)` or `cardAt(4, BOB)`. Hand slots and ranks stay numeric. The names are
   file-local, not a shared export.
+- The decision engine is tested with scenarios: each convention gets tests built from the examples on
+  its H-Group page. Simulator self-play is for exploring how the engine plays, not a test, and nothing
+  gates on its scores.

@@ -17,7 +17,7 @@ export interface Replay {
 export interface ReplayResult {
   /** The state before any action, then the state after each action: `actions.length + 1` states. */
   readonly states: readonly GameState[];
-  /** The event each action produced, in order. */
+  /** The event each action produced, in order: the final state's `log`. */
   readonly events: readonly GameEvent[];
   /** The state after the last action. */
   readonly state: GameState;
@@ -30,7 +30,6 @@ export interface ReplayResult {
 export function replay({ config, deck, actions }: Replay): ReplayResult {
   let state = createGame(config, deck);
   const states: GameState[] = [state];
-  const events: GameEvent[] = [];
   for (const [turn, action] of actions.entries()) {
     let result: ReturnType<typeof apply>;
     try {
@@ -41,7 +40,6 @@ export function replay({ config, deck, actions }: Replay): ReplayResult {
     }
     state = result.state;
     states.push(state);
-    events.push(result.event);
   }
-  return { states, events, state };
+  return { states, events: state.log, state };
 }

@@ -1,5 +1,5 @@
 // Actions and the events `apply` returns. See docs/ARCHITECTURE.md ("Actions", "Events").
-import { produce } from "immer";
+import { castDraft, produce } from "immer";
 import { type Card, type CardId, RANKS, type Rank, type Suit } from "./card";
 import type { GameConfig } from "./config";
 import { finalRound, type GameState, type Seat } from "./state";
@@ -156,6 +156,7 @@ export function apply(state: GameState, action: Action): { state: GameState; eve
       }
     }
 
+    draft.log.push(castDraft(event));
     draft.turn++;
     draft.currentPlayer = (seat + 1) % state.config.numPlayers;
     if (draft.turnsRemaining !== null) draft.turnsRemaining--;

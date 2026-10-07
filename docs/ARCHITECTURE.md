@@ -101,6 +101,7 @@ State is normalized and treated as immutable (updates go through Immer):
   so index 0 is hanab.live's slot 1.
 - Play stacks are a count per suit.
 - Plus clue tokens, strikes, current player, turns remaining in the final round, and `status`.
+- `log`: the event of every action so far, oldest first.
 
 Every card has a stable id: its index in the dealt deck (equivalent to hanab.live's `order`). Ids
 let clue history, replays, AI notes and UI animations follow a specific card as it moves between zones.
@@ -137,9 +138,10 @@ is hidden, so card ids index a view the same way they index state. AIs only ever
 receive a `PlayerView`, so they cannot cheat by construction. The UI renders the same projection for the
 human's seat.
 
-Conventions depend on the order of moves and who made them, so `PlayerView` will also carry the game's
-event log so far (Phase 2, step 1). Events already say which cards a clue touched and what a played or
-discarded card was, so nothing needs re-deriving.
+Conventions depend on the order of moves and who made them, so state, and with it every `PlayerView`,
+carries the game's event log so far. Events hold only public information (which cards a clue touched,
+what a played or discarded card was, which card id was drawn), so the log needs no filtering and
+nothing needs re-deriving.
 
 ### Clue knowledge
 
@@ -148,6 +150,11 @@ information) and which clues it was present for but not touched by (negative inf
 
 Deduction beyond that (for example "this can't be a red 3, both are visible") is strategy, not rules,
 and lives in `@hanabi/hgroup`, which AIs and the UI opt into.
+
+### Test helpers
+
+`@hanabi/engine/testing` exports the scenario builder (`deal`) and `randomGame`, so other packages'
+tests can build games the same way. It is for tests only and is not part of the public API above.
 
 ## Seats and AIs
 
@@ -202,7 +209,10 @@ Only H-Group is supported. There is no abstract "convention set" interface.
 - **Card possibilities:** rules-level deduction of each card's possible identities from clue knowledge
   and visible cards. It is a module of `hgroup` with no convention logic in it, so the UI can show what
   a card could be and the review can contrast "the rules say" with "the conventions say". It can be
-  split into its own package later.
+  split into its own package later. `cluePossibilities(config, clues)` is what the clues alone allow,
+  which every player knows. `possibilities(view)` adds the viewer's eliminations: an identity is ruled
+  out when every copy is visible or deduced for another of the viewer's cards, repeated until nothing
+  changes. A property test checks that a card's real identity is always among its possibilities.
 - **Common knowledge:** what every player agrees each card could be once conventions are applied. It is
   what lets the engine predict how a receiver will read a clue before suggesting it.
 - **Private knowledge:** what one seat can add to common knowledge from the cards it sees.

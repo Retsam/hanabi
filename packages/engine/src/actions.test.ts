@@ -247,6 +247,13 @@ describe("apply", () => {
     before.play(0).clue(ALICE, "red").discard(1);
     expect(before.state).toEqual(snapshot);
   });
+
+  it("appends the event it returns to the log", () => {
+    const first = start().clue(BOB, 1);
+    const { state, event } = apply(first.state, { type: "play", cardId: first.cardAt(0, BOB) });
+    expect(state.log).toEqual([first.event, event]);
+    expect(state.log[0]).toMatchObject({ type: "clue", seat: ALICE, target: BOB });
+  });
 });
 
 describe("score", () => {

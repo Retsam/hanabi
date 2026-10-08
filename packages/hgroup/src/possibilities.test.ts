@@ -1,7 +1,8 @@
 import { type Card, playerView, standardConfig } from "@hanabi/engine";
-import { deal, randomGame } from "@hanabi/engine/testing";
+import { deal } from "@hanabi/engine/testing";
 import { describe, expect, it } from "vitest";
 import { cluePossibilities, identities, possibilities } from "./possibilities";
+import { forRandomGames } from "./testing/randomGames";
 
 const ALICE = 0;
 const BOB = 1;
@@ -105,26 +106,19 @@ describe("possibilities", () => {
   });
 });
 
-// Cheap locally; CI raises PROPERTY_GAMES like the engine's property tests.
-const GAMES = Math.ceil(Number(process.env.PROPERTY_GAMES ?? 200) / 4);
-
 describe("possibilities over random games", { timeout: 60_000 }, () => {
   it("always include every card's real identity, for the player to move on every turn", () => {
-    const failures: string[] = [];
-    for (let seed = 0; seed < GAMES; seed++) {
-      const numPlayers = ([2, 3, 4, 5] as const)[seed % 4]!;
-      for (const state of randomGame(numPlayers, seed).states) {
-        const seat = state.currentPlayer;
-        const result = possibilities(playerView(state, seat));
+    forRandomGames(4, ({ states }) => {
+      const failures: string[] = [];
+      for (const state of states) {
+        const result = possibilities(playerView(state, state.currentPlayer));
         for (const { id, card } of state.cards) {
           const isCard = (possible: Card) =>
             possible.suit === card.suit && possible.rank === card.rank;
-          if (!result[id]!.some(isCard)) {
-            failures.push(`game ${seed}, turn ${state.turn}, seat ${seat}: card ${id}`);
-          }
+          if (!result[id]!.some(isCard)) failures.push(`turn ${state.turn}: card ${id}`);
         }
       }
-    }
-    expect(failures).toEqual([]);
+      expect(failures).toEqual([]);
+    });
   });
 });

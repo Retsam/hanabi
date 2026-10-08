@@ -1,13 +1,11 @@
 import { playerView } from "@hanabi/engine";
-import { deal, randomGame } from "@hanabi/engine/testing";
+import { deal } from "@hanabi/engine/testing";
 import { describe, expect, it } from "vitest";
 import { history } from "./history";
+import { forRandomGames } from "./testing/randomGames";
 
 const ALICE = 0;
 const BOB = 1;
-
-// Cheap locally; CI raises PROPERTY_GAMES like the engine's property tests.
-const GAMES = Math.ceil(Number(process.env.PROPERTY_GAMES ?? 200) / 5);
 
 describe("history", { timeout: 60_000 }, () => {
   it("rebuilds the table before every event", () => {
@@ -39,16 +37,14 @@ describe("history", { timeout: 60_000 }, () => {
     expect(moments[4]!.discardPile).toEqual([r5, y3]);
   });
 
-  it("matches every state of random games, from every seat", () => {
-    for (let seed = 0; seed < GAMES; seed++) {
-      const numPlayers = ([2, 3, 4, 5] as const)[seed % 4]!;
-      const { states, state } = randomGame(numPlayers, seed);
-      const moments = history(playerView(state, seed % numPlayers));
+  it("matches every state of random games, from any seat", () => {
+    forRandomGames(5, ({ states, state }, seat) => {
+      const moments = history(playerView(state, seat));
       expect(moments).toHaveLength(states.length);
       moments.forEach((moment, turn) => {
         const { hands, stacks, discardPile, cards } = states[turn]!;
         expect(moment).toEqual({ hands, stacks, discardPile, clues: cards.map((c) => c.clues) });
       });
-    }
+    });
   });
 });

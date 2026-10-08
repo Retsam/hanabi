@@ -9,6 +9,9 @@ const ALICE = 0;
 const BOB = 1;
 const CATHY = 2;
 
+// Cheap locally; CI raises PROPERTY_GAMES like the engine's property tests.
+const GAMES = Math.ceil(Number(process.env.PROPERTY_GAMES ?? 200) / 10);
+
 /** Card names ("r4") for a list of identities, to keep expectations short. */
 const names = (cards: readonly Card[]) => cards.map((card) => `${card.suit[0]}${card.rank}`);
 
@@ -306,9 +309,9 @@ describe("privateKnowledge", () => {
   });
 });
 
-describe("readGame over random games", () => {
+describe("readGame over random games", { timeout: 60_000 }, () => {
   it("never leaves a card with no possibilities", () => {
-    for (let seed = 0; seed < 20; seed++) {
+    for (let seed = 0; seed < GAMES; seed++) {
       const numPlayers = ([2, 3, 4, 5] as const)[seed % 4]!;
       const { state } = randomGame(numPlayers, seed);
       const view = playerView(state, seed % numPlayers);

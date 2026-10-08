@@ -6,7 +6,10 @@ import { history } from "./history";
 const ALICE = 0;
 const BOB = 1;
 
-describe("history", () => {
+// Cheap locally; CI raises PROPERTY_GAMES like the engine's property tests.
+const GAMES = Math.ceil(Number(process.env.PROPERTY_GAMES ?? 200) / 5);
+
+describe("history", { timeout: 60_000 }, () => {
   it("rebuilds the table before every event", () => {
     const start = deal({
       hands: [
@@ -37,7 +40,7 @@ describe("history", () => {
   });
 
   it("matches every state of random games, from every seat", () => {
-    for (let seed = 0; seed < 40; seed++) {
+    for (let seed = 0; seed < GAMES; seed++) {
       const numPlayers = ([2, 3, 4, 5] as const)[seed % 4]!;
       const { states, state } = randomGame(numPlayers, seed);
       const moments = history(playerView(state, seed % numPlayers));

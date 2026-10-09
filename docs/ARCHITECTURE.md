@@ -259,6 +259,9 @@ easy to add later. That converter is not part of the engine phase.
 - A "stacked deck" scenario builder, so tests read like
   `deal({ hands, drawPile, stacks }).clue(BOB, 2).play(0)`. Cards on the given stacks are taken out of
   the deck, so scenario states conserve cards like real ones.
+  Hand cards can start already clued: `"r*4"` is a red 4 whose color is known, `"r4*"` one whose rank
+  is known, and `"r*4*"` both. Those clues are on the card from the start with no logged clue and no
+  negative information on other cards, so a test shows the situation under test without setup clues.
 - Property tests with fast-check: random legal games must preserve invariants (cards are conserved,
   clue tokens stay within 0 to 8, score never decreases, the game always terminates, `validate` and
   `legalActions` agree, views never leak hidden cards). The random games

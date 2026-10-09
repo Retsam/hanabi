@@ -13,7 +13,7 @@ const CATHY = 2;
 /** Card names ("r4") for a list of identities, to keep expectations short. */
 const names = (cards: readonly Card[]) => cards.map((card) => `${card.suit[0]}${card.rank}`);
 
-/** The game read at level 1 from `seat`'s view. */
+/** The game read from `seat`'s view at a particular level (1 by default). */
 const read = (game: Scenario, seat: number, level = 1) =>
   readGame(playerView(game.state, seat), level);
 

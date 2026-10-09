@@ -99,8 +99,8 @@ describe("play clues", () => {
       stacks: { red: 1 },
     })
       .clue(CATHY, 1)
-      .clue(ALICE, 3)
-      .clue(ALICE, 4)
+      .clue(ALICE, 3) // Setup only: passes the turn, not a conventional clue.
+      .clue(ALICE, 4) // Setup only: passes the turn, not a conventional clue.
       .clue(BOB, 2);
     const reading = lastReading(game, BOB);
     expect(reading.focus).toBe(game.cardAt(2, BOB));
@@ -120,8 +120,8 @@ describe("play clues", () => {
       stacks: { red: 1 },
     })
       .clue(CATHY, 1)
-      .clue(ALICE, 3)
-      .clue(ALICE, 4)
+      .clue(ALICE, 3) // Setup only: passes the turn, not a conventional clue.
+      .clue(ALICE, 4) // Setup only: passes the turn, not a conventional clue.
       .clue(BOB, 2);
     expect(lastReading(game, CATHY).play).toEqual(["r2", "y2", "g2", "b2", "p2"]);
   });
@@ -137,7 +137,7 @@ describe("play clues", () => {
       stacks: { red: 1, yellow: 3, green: 3, purple: 3 },
     })
       .clue(BOB, 2)
-      .clue(CATHY, 3)
+      .clue(CATHY, 3) // Setup only: passes the turn, not a conventional clue.
       .clue(ALICE, 5)
       .clue(BOB, "red");
     const reading = lastReading(game, BOB);
@@ -207,8 +207,8 @@ describe("save clues", () => {
     })
       .clue(BOB, 5)
       .clue(ALICE, 1)
-      .discard(0)
-      .clue(ALICE, 2)
+      .discard(0) // Setup only: puts the other b4 in the discard pile.
+      .clue(ALICE, 2) // Setup only: passes the turn, not a conventional clue.
       .clue(BOB, "blue");
     const reading = lastReading(game, BOB);
     expect(reading).toMatchObject({ focus: game.cardAt(3, BOB), play: ["b2"], save: ["b4"] });
@@ -228,8 +228,8 @@ describe("save clues", () => {
       stacks: { red: 3, green: 2, blue: 1 },
       clueTokens: 7,
     })
-      .discard(0)
-      .clue(ALICE, 2)
+      .discard(0) // Setup only: puts the other b3 in the discard pile.
+      .clue(ALICE, 2) // Setup only: passes the turn, not a conventional clue.
       .clue(BOB, "blue");
     expect(lastReading(game, BOB)).toMatchObject({ play: ["b2"], save: ["b3"] });
     expect(common(game, BOB, game.cardAt(4, BOB))).toEqual(["b2", "b3"]);
@@ -259,12 +259,13 @@ describe("Good Touch", () => {
         ["r3", "p3", "g4", "p5", "y4"],
         ["p4", "b3", "g2", "y3", "g3"],
       ],
-      stacks: { purple: 2 },
+      stacks: { green: 1, purple: 2 },
     })
-      .clue(BOB, 3) // Alice gives Bob something to do.
+      .clue(BOB, 2) // A play clue on Bob's g2, so that Bob gives the next clue.
       .clue(ALICE, "purple")
       .play(1)
       .play(0);
+    expect(names(read(game, ALICE).readings[0]!.play)).toEqual(["g2"]);
     expect(common(game, ALICE, game.cardAt(3, ALICE))).toEqual(["p5"]);
   });
 

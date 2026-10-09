@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { playerView } from "../playerView";
 import { deal } from "./scenario";
+
+const BOB = 1;
 
 const start = () =>
   deal({
@@ -52,5 +55,57 @@ describe("deal", () => {
 
   it("rejects a stack for an unknown suit", () => {
     expect(() => deal({ hands: start().hands, stacks: { rd: 3 } })).toThrow("Unknown suit rd");
+  });
+
+  describe("pre-clued cards", () => {
+    const game = deal({
+      hands: [
+        ["r1", "r2", "r3", "r4", "r5"],
+        ["y*1", "y2*", "g*1*", "b1", "b2"],
+      ],
+    });
+    const cluesAt = (slot: number) => game.state.cards[game.cardAt(slot, BOB)]!.clues;
+
+    it("marks a known color, a known rank, or both", () => {
+      expect(game.hands[BOB]).toEqual(["y1", "y2", "g1", "b1", "b2"]);
+      expect(cluesAt(0).touchedBy).toEqual([{ kind: "color", value: "yellow" }]);
+      expect(cluesAt(1).touchedBy).toEqual([{ kind: "rank", value: 2 }]);
+      expect(cluesAt(2).touchedBy).toEqual([
+        { kind: "color", value: "green" },
+        { kind: "rank", value: 1 },
+      ]);
+    });
+
+    it("gives no negative information and logs no clue", () => {
+      for (const slot of [0, 1, 2, 3, 4]) expect(cluesAt(slot).notTouchedBy).toEqual([]);
+      expect(cluesAt(3).touchedBy).toEqual([]);
+      expect(game.state.log).toEqual([]);
+      expect(game.state.clueTokens).toBe(8);
+    });
+
+    it("shows in the clued player's own view", () => {
+      const view = playerView(game.state, BOB);
+      const card = view.cards[game.cardAt(2, BOB)]!;
+      expect(card.card).toBeNull();
+      expect(card.clues).toEqual(cluesAt(2));
+    });
+
+    it("adds to clues given later", () => {
+      const later = game.clue(BOB, 1);
+      expect(later.state.cards[later.cardAt(2, BOB)]!.clues.touchedBy).toEqual([
+        { kind: "color", value: "green" },
+        { kind: "rank", value: 1 },
+        { kind: "rank", value: 1 },
+      ]);
+      expect(later.state.cards[later.cardAt(0, BOB)]!.clues.touchedBy).toHaveLength(2);
+    });
+
+    it("rejects clue marks outside hands and malformed marks", () => {
+      const bob = game.hands[BOB]!;
+      const hands = [["r1", "r2", "r3", "r4", "r5"], bob];
+      expect(() => deal({ hands, drawPile: ["p*1"] })).toThrow("Bad card name p*1");
+      const badMark = [["r**1", "r2", "r3", "r4", "r5"], bob];
+      expect(() => deal({ hands: badMark })).toThrow("Bad card name r**1");
+    });
   });
 });

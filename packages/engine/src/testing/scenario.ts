@@ -9,9 +9,20 @@ import { createGame, finalRound, type GameState, type Seat } from "../state";
 /** Short card notation, like "r1" for a red 1: the suit's first letter, then the rank. */
 export type CardName = string;
 
+/**
+ * A card name in a hand, optionally marked as already clued: a `*` after the suit letter means its
+ * color is known and a `*` after the rank means its rank is known. "r*4" is a red-clued 4, "r4*" a
+ * 4-clued red 4, and "r*4*" a red 4 touched by both.
+ */
+export type HandCardName = string;
+
 export interface ScenarioSetup {
-  /** Each seat's hand, newest card (slot 1) first. Their number sets the player count. */
-  readonly hands: readonly (readonly CardName[])[];
+  /**
+   * Each seat's hand, newest card (slot 1) first. Their number sets the player count. Cards marked
+   * as clued (see `HandCardName`) start the game touched by those clues, as if they had been given,
+   * but no clue is logged and no other card gets negative information from them.
+   */
+  readonly hands: readonly (readonly HandCardName[])[];
   /**
    * The draw pile, next card first. When given, it is the whole draw pile and every card not
    * named anywhere is put in the discard pile. When omitted, the rest of the deck is drawn in
@@ -29,6 +40,21 @@ export function parseCard(config: GameConfig, name: CardName): Card {
   const rank = RANKS.find((r) => r === Number(name.slice(1)));
   if (suit === undefined || rank === undefined) throw new Error(`Bad card name ${name}`);
   return { suit, rank };
+}
+
+/** Splits a hand card name like "r*4*" into its card and the clues already touching it. */
+export function parseHandCard(
+  config: GameConfig,
+  name: HandCardName,
+): { card: Card; clues: Clue[] } {
+  const match = /^(.)(\*?)(.)(\*?)$/.exec(name);
+  if (match === null) throw new Error(`Bad card name ${name}`);
+  const [, suitLetter, colorKnown, rank, rankKnown] = match;
+  const card = parseCard(config, `${suitLetter}${rank}`);
+  const clues: Clue[] = [];
+  if (colorKnown) clues.push({ kind: "color", value: card.suit });
+  if (rankKnown) clues.push({ kind: "rank", value: card.rank });
+  return { card, clues };
 }
 
 /** Starts a game whose hands, draw pile and stacks are exactly as described. */
@@ -51,16 +77,22 @@ export function deal(setup: ScenarioSetup): Scenario {
     if (!config.suits.includes(suit)) throw new Error(`Unknown suit ${suit}`);
     return RANKS.filter((rank) => rank <= height).map((rank) => take({ suit, rank }));
   });
-  // createGame deals each hand oldest card first, so reverse each hand into the deck.
-  const dealt = setup.hands.flatMap((hand) => {
+  const hands = setup.hands.map((hand) => {
     if (hand.length !== config.handSize) throw new Error(`Hands need ${config.handSize} cards`);
-    return hand.toReversed().map((name) => take(parseCard(config, name)));
+    return hand.map((name) => parseHandCard(config, name));
   });
+  // createGame deals each hand oldest card first, so reverse each hand into the deck.
+  const dealt = hands.flatMap((hand) => hand.toReversed().map(({ card }) => take(card)));
   const drawn = (setup.drawPile ?? []).map((name) => take(parseCard(config, name)));
   const unnamed = remaining.length;
   const deck = [...dealt, ...drawn, ...remaining, ...played];
 
   const state = produce(createGame(config, deck), (draft) => {
+    for (const [seat, hand] of hands.entries()) {
+      for (const [slot, { clues }] of hand.entries()) {
+        draft.cards[draft.hands[seat]![slot]!]!.clues.touchedBy.push(...clues);
+      }
+    }
     // The played cards come off the bottom of the draw pile onto the stacks.
     draft.drawPile.splice(draft.drawPile.length - played.length);
     for (const [suit, height] of stacks) draft.stacks[suit] = height;

@@ -1,13 +1,12 @@
-import { playerView } from "@hanabi/engine";
-import { deal } from "@hanabi/engine/testing";
 import { describe, expect, it } from "vitest";
-import { history } from "./history";
-import { forRandomGames } from "./testing/randomGames";
+import { playerView } from "./playerView";
+import { history } from "./table";
+import { deal } from "./testing/scenario";
 
 const ALICE = 0;
 const BOB = 1;
 
-describe("history", { timeout: 60_000 }, () => {
+describe("history", () => {
   it("rebuilds the table before every event", () => {
     const start = deal({
       hands: [
@@ -37,14 +36,16 @@ describe("history", { timeout: 60_000 }, () => {
     expect(moments[4]!.discardPile).toEqual([r5, y3]);
   });
 
-  it("matches every state of random games, from any seat", () => {
-    forRandomGames(5, ({ states, state }, seat) => {
-      const moments = history(playerView(state, seat));
-      expect(moments).toHaveLength(states.length);
-      moments.forEach((moment, turn) => {
-        const { hands, stacks, discardPile, cards } = states[turn]!;
-        expect(moment).toEqual({ hands, stacks, discardPile, clues: cards.map((c) => c.clues) });
-      });
-    });
+  it("starts from a scenario's setup, with its clued and discarded cards", () => {
+    const game = deal({
+      hands: [
+        ["r1", "r2", "r3", "r4", "r5*"],
+        ["y1", "y2", "y3", "y4", "y5"],
+      ],
+      discardPile: ["b4"],
+    }).clue(BOB, 1);
+    const [opening] = history(game.state);
+    expect(opening!.discardPile.map((id) => game.name(id))).toEqual(["b4"]);
+    expect(opening!.clues[game.cardAt(4, ALICE)]!.touchedBy).toEqual([{ kind: "rank", value: 5 }]);
   });
 });

@@ -3,6 +3,7 @@ import type { Clue, GameEvent } from "./actions";
 import { type Card, type CardId, RANKS, type Suit } from "./card";
 import type { GameConfig } from "./config";
 import { orderedDeck } from "./deck";
+import { type Moment, publicTable } from "./table";
 
 /** A player's position at the table, from 0 to `numPlayers - 1`. */
 export type Seat = number;
@@ -46,6 +47,8 @@ export interface GameState {
    * the log is part of every `PlayerView`.
    */
   readonly log: readonly GameEvent[];
+  /** The public table before the first action. With `log`, it rebuilds every earlier table. */
+  readonly opening: Moment;
 }
 
 const cardKey = (card: Card) => `${card.suit} ${card.rank}`;
@@ -75,25 +78,23 @@ export function createGame(config: GameConfig, deck: readonly Card[]): GameState
   const stacks: Record<Suit, number> = {};
   for (const suit of config.suits) stacks[suit] = 0;
 
+  const state: Omit<GameState, "opening"> = {
+    config,
+    cards,
+    hands,
+    drawPile,
+    discardPile: [],
+    stacks,
+    clueTokens: config.maxClueTokens,
+    strikes: 0,
+    currentPlayer: 0,
+    // If the hands use up the deck, the final round starts right away.
+    ...(drawPile.length === 0 ? finalRound(config) : { turnsRemaining: null, status: "playing" }),
+    turn: 0,
+    log: [],
+  };
   // Frozen like every state `apply` returns, so views of it can't be used to change the game.
-  return freeze(
-    {
-      config,
-      cards,
-      hands,
-      drawPile,
-      discardPile: [],
-      stacks,
-      clueTokens: config.maxClueTokens,
-      strikes: 0,
-      currentPlayer: 0,
-      // If the hands use up the deck, the final round starts right away.
-      ...(drawPile.length === 0 ? finalRound(config) : { turnsRemaining: null, status: "playing" }),
-      turn: 0,
-      log: [],
-    },
-    true,
-  );
+  return freeze({ ...state, opening: publicTable(state) }, true);
 }
 
 /** The fields that start the final round: everyone gets one more turn. */

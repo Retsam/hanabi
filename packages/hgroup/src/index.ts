@@ -8,7 +8,6 @@ export {
   sameCard,
 } from "./possibilities";
 export { applies, CONVENTION_LEVELS, type ConventionId, type Level } from "./conventions";
-export { history, type Moment } from "./history";
 export {
   chop,
   type ClueReading,

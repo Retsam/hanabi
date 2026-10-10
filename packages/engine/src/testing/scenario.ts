@@ -1,10 +1,11 @@
 // A stacked-deck scenario builder for tests: deal exact hands, then step through actions by slot.
-import { produce } from "immer";
+import { freeze, produce } from "immer";
 import { type Action, apply, type Clue, type GameEvent } from "../actions";
 import { type Card, type CardId, RANKS, type Rank, type Suit } from "../card";
 import { type GameConfig, standardConfig } from "../config";
 import { orderedDeck } from "../deck";
 import { createGame, finalRound, type GameState, type Seat } from "../state";
+import { publicTable } from "../table";
 
 /** Short card notation, like "r1" for a red 1: the suit's first letter, then the rank. */
 export type CardName = string;
@@ -112,7 +113,8 @@ export function deal(setup: ScenarioSetup): Scenario {
     if (setup.clueTokens !== undefined) draft.clueTokens = setup.clueTokens;
     if (setup.strikes !== undefined) draft.strikes = setup.strikes;
   });
-  return new Scenario(state, []);
+  // The setup is how the game starts, so it is the opening table too.
+  return new Scenario(freeze({ ...state, opening: publicTable(state) }, true), []);
 }
 
 /** An immutable game in progress. Each action returns a new Scenario. */

@@ -25,10 +25,15 @@ export interface ScenarioSetup {
   readonly hands: readonly (readonly HandCardName[])[];
   /**
    * The draw pile, next card first. When given, it is the whole draw pile and every card not
-   * named anywhere is put in the discard pile. When omitted, the rest of the deck is drawn in
-   * suit then rank order.
+   * named anywhere is put in the discard pile, after any `discardPile` cards. When omitted, the
+   * rest of the deck is drawn in suit then rank order.
    */
   readonly drawPile?: readonly CardName[];
+  /**
+   * Cards already in the discard pile, oldest first. They are taken out of the deck, as if
+   * discarded before the scenario began, but nothing is logged and clue tokens are unchanged.
+   */
+  readonly discardPile?: readonly CardName[];
   /** How high each suit's stack starts. The cards on the stacks are taken out of the deck. */
   readonly stacks?: Readonly<Record<Suit, number>>;
   readonly clueTokens?: number;
@@ -83,9 +88,10 @@ export function deal(setup: ScenarioSetup): Scenario {
   });
   // createGame deals each hand oldest card first, so reverse each hand into the deck.
   const dealt = hands.flatMap((hand) => hand.toReversed().map(({ card }) => take(card)));
+  const discarded = (setup.discardPile ?? []).map((name) => take(parseCard(config, name)));
   const drawn = (setup.drawPile ?? []).map((name) => take(parseCard(config, name)));
   const unnamed = remaining.length;
-  const deck = [...dealt, ...drawn, ...remaining, ...played];
+  const deck = [...dealt, ...drawn, ...remaining, ...discarded, ...played];
 
   const state = produce(createGame(config, deck), (draft) => {
     for (const [seat, hand] of hands.entries()) {
@@ -96,11 +102,13 @@ export function deal(setup: ScenarioSetup): Scenario {
     // The played cards come off the bottom of the draw pile onto the stacks.
     draft.drawPile.splice(draft.drawPile.length - played.length);
     for (const [suit, height] of stacks) draft.stacks[suit] = height;
+    // Then the discarded cards come off the bottom onto the discard pile.
+    draft.discardPile.push(...draft.drawPile.splice(draft.drawPile.length - discarded.length));
     // With a draw pile given, the unnamed cards go from the bottom of it to the discard pile.
     if (setup.drawPile !== undefined) {
       draft.discardPile.push(...draft.drawPile.splice(draft.drawPile.length - unnamed));
-      if (draft.drawPile.length === 0) Object.assign(draft, finalRound(config));
     }
+    if (draft.drawPile.length === 0) Object.assign(draft, finalRound(config));
     if (setup.clueTokens !== undefined) draft.clueTokens = setup.clueTokens;
     if (setup.strikes !== undefined) draft.strikes = setup.strikes;
   });

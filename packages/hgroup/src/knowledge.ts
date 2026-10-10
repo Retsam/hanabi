@@ -77,8 +77,9 @@ const isClued = (moment: Moment, id: CardId) => moment.clues[id]!.touchedBy.leng
  */
 export function readGame(view: PlayerView, level: Level): Knowledge {
   const moments = history(view);
-  const all = identities(view.config);
-  let common: (readonly Card[])[] = view.cards.map(() => all);
+  // Cards can start the game already clued (in test scenarios), with no logged clue to read.
+  const start = { level, moment: moments[0]!, common: startingNotes(view, moments[0]!) };
+  let common = settle(view, start);
   const readings: (ClueReading & { turn: number })[] = [];
 
   for (const [turn, event] of view.log.entries()) {
@@ -95,6 +96,16 @@ export function readGame(view: PlayerView, level: Level): Knowledge {
     common = settle(view, { level, moment: moments[turn + 1]!, common });
   }
   return { level, moment: moments.at(-1)!, common, readings };
+}
+
+/** Each card's clue possibilities at `moment`, shared between cards with no clues. */
+function startingNotes(view: PlayerView, moment: Moment): (readonly Card[])[] {
+  const all = identities(view.config);
+  return moment.clues.map((clues) =>
+    clues.touchedBy.length + clues.notTouchedBy.length === 0
+      ? all
+      : cluePossibilities(view.config, clues),
+  );
 }
 
 /**

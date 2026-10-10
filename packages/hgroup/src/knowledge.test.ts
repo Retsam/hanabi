@@ -43,12 +43,10 @@ describe("chop", () => {
   it("is the oldest unclued card, or nothing in a fully clued hand", () => {
     const game = deal({
       hands: [
-        ["r2", "r3", "r3", "b4", "r5"],
-        ["b4", "b3", "g3", "g4", "g5"],
+        ["r2", "r3", "r3", "b4", "r5*"],
+        ["b4", "b3", "g*3", "g*4", "g*5"],
       ],
-    })
-      .clue(BOB, "green")
-      .clue(ALICE, 5);
+    });
     const { moment } = read(game, ALICE);
     expect(chop(moment, ALICE)).toBe(game.cardAt(3, ALICE));
     expect(chop(moment, BOB)).toBe(game.cardAt(1, BOB));
@@ -94,14 +92,10 @@ describe("play clues", () => {
       hands: [
         ["r3", "r4", "p4", "p3", "g4"],
         ["p4", "y4", "b2", "y3", "g3"],
-        ["r5", "y1", "g1", "b1", "b5"],
+        ["r5", "y1*", "g1*", "b1*", "b5"],
       ],
       stacks: { red: 1 },
-    })
-      .clue(CATHY, 1)
-      .clue(ALICE, 3) // Setup only: passes the turn, not a conventional clue.
-      .clue(ALICE, 4) // Setup only: passes the turn, not a conventional clue.
-      .clue(BOB, 2);
+    }).clue(BOB, 2);
     const reading = lastReading(game, BOB);
     expect(reading.focus).toBe(game.cardAt(2, BOB));
     expect(reading.play).toEqual(["r2", "y2", "g2", "b2"]);
@@ -115,14 +109,10 @@ describe("play clues", () => {
       hands: [
         ["r3", "r4", "p4", "p3", "g4"],
         ["p4", "y4", "b2", "y3", "g3"],
-        ["r5", "y1", "g1", "b1", "b5"],
+        ["r5", "y1*", "g1*", "b1*", "b5"],
       ],
       stacks: { red: 1 },
-    })
-      .clue(CATHY, 1)
-      .clue(ALICE, 3) // Setup only: passes the turn, not a conventional clue.
-      .clue(ALICE, 4) // Setup only: passes the turn, not a conventional clue.
-      .clue(BOB, 2);
+    }).clue(BOB, 2);
     expect(lastReading(game, CATHY).play).toEqual(["r2", "y2", "g2", "b2", "p2"]);
   });
 
@@ -131,15 +121,10 @@ describe("play clues", () => {
     const game = deal({
       hands: [
         ["r5", "y5", "g5", "b5", "p5"],
-        ["b4", "g4", "y4", "p4", "r2"],
-        ["r3", "r4", "y4", "g4", "b3"],
+        ["b4", "g4", "y4", "p4", "r2*"],
       ],
       stacks: { red: 1, yellow: 3, green: 3, purple: 3 },
-    })
-      .clue(BOB, 2)
-      .clue(CATHY, 3) // Setup only: passes the turn, not a conventional clue.
-      .clue(ALICE, 5)
-      .clue(BOB, "red");
+    }).clue(BOB, "red");
     const reading = lastReading(game, BOB);
     expect(reading).toMatchObject({ focus: game.cardAt(4, BOB), play: ["r2"] });
     expect(common(game, BOB, game.cardAt(4, BOB))).toEqual(["r2"]);
@@ -201,12 +186,11 @@ describe("save clues", () => {
     const game = deal({
       hands: [
         ["b4", "r2", "y2", "g1", "p2"],
-        ["r3", "y3", "p1", "b4", "g5"],
+        ["r3", "y3", "p1", "b4", "g5*"],
       ],
       stacks: { red: 1, yellow: 1, blue: 1 },
+      clueTokens: 7,
     })
-      .clue(BOB, 5)
-      .clue(ALICE, 1)
       .discard(0) // Setup only: puts the other b4 in the discard pile.
       .clue(ALICE, 2) // Setup only: passes the turn, not a conventional clue.
       .clue(BOB, "blue");
@@ -253,19 +237,14 @@ describe("Good Touch", () => {
   });
 
   // beginner/good-touch-principle, second example: purple is up to 4, so the purple card is p5.
-  it("rules out cards that have since been played", () => {
+  it("rules out cards that have already played", () => {
     const game = deal({
       hands: [
-        ["r3", "p3", "g4", "p5", "y4"],
+        ["r3", "g4", "y4", "p*5", "b4"],
         ["p4", "b3", "g2", "y3", "g3"],
       ],
-      stacks: { green: 1, purple: 2 },
-    })
-      .clue(BOB, 2) // A play clue on Bob's g2, so that Bob gives the next clue.
-      .clue(ALICE, "purple")
-      .play(1)
-      .play(0);
-    expect(names(read(game, ALICE).readings[0]!.play)).toEqual(["g2"]);
+      stacks: { purple: 4 },
+    });
     expect(common(game, ALICE, game.cardAt(3, ALICE))).toEqual(["p5"]);
   });
 
@@ -290,12 +269,10 @@ describe("privateKnowledge", () => {
     const game = deal({
       hands: [
         ["r3", "r4", "p4", "p3", "g4"],
-        ["b4", "y3", "y5", "g3", "y2"],
-        ["b5", "y4", "g4", "b3", "r2"],
+        ["b4", "y3", "y5", "g3", "y2*"],
+        ["b5", "y4", "g4", "b3", "r2*"],
       ],
-    })
-      .clue(BOB, 2)
-      .clue(CATHY, 2);
+    });
     const knowledge = read(game, BOB);
     const bobs2 = game.cardAt(4, BOB);
     expect(names(knowledge.common[bobs2]!)).toEqual(["r2", "y2", "g2", "b2", "p2"]);

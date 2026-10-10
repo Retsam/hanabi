@@ -217,7 +217,8 @@ Only H-Group is supported. There is no abstract "convention set" interface.
 - **Common knowledge:** what every player agrees each card could be once conventions are applied. It is
   what lets the engine predict how a receiver will read a clue before suggesting it. `readGame(view,
 level)` builds it: `history(view)` rebuilds the public table before every event in the log, and each
-  clue is read (`readClue`) on the table it was given on. The same `readClue` predicts how a clue the
+  clue is read (`readClue`) on the table it was given on. Cards that start the game already clued (as
+  test scenarios allow) begin from their clues, with Good Touch applied but no reading. The same `readClue` predicts how a clue the
   viewer is considering would be read.
 - **Private knowledge:** what one seat can add to common knowledge from the cards it sees
   (`privateKnowledge`).

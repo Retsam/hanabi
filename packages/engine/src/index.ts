@@ -15,3 +15,4 @@ export {
   type Seat,
   type Status,
 } from "./state";
+export { applyEvent, history, type Moment, publicTable } from "./table";

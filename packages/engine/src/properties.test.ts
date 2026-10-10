@@ -5,6 +5,7 @@ import { type Action, allClues, legalActions, validate } from "./actions";
 import { type CardId, RANKS } from "./card";
 import { playerView } from "./playerView";
 import { type GameState, maxScore, score } from "./state";
+import { history, publicTable } from "./table";
 import { type RandomGame, randomGame } from "./testing/randomGame";
 
 // Every property runs over the same games (a prefix of them for the slower properties), so each
@@ -211,6 +212,17 @@ describe("random games", { timeout: 60_000 }, () => {
         }
         if ((legal.size === 0) !== (state.status === "over")) {
           yield `turn ${state.turn}: ${legal.size} legal actions while ${state.status}`;
+        }
+      }
+    }, GAMES / 4);
+  });
+
+  it("rebuild every earlier table from the opening table and the log", () => {
+    expectForAllGames(function* (game) {
+      const moments = history(game.state);
+      for (const [turn, state] of game.states.entries()) {
+        if (JSON.stringify(moments[turn]) !== JSON.stringify(publicTable(state))) {
+          yield `turn ${turn}: the rebuilt table does not match`;
         }
       }
     }, GAMES / 4);

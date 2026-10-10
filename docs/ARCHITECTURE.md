@@ -103,6 +103,8 @@ State is normalized and treated as immutable (updates go through Immer):
 - Play stacks are a count per suit.
 - Plus clue tokens, strikes, current player, turns remaining in the final round, and `status`.
 - `log`: the event of every action so far, oldest first.
+- `opening`: the public table before the first action (hands as card ids, stacks, discard pile and
+  clue knowledge). With `log`, it rebuilds every earlier table; see Events.
 
 Every card has a stable id: its index in the dealt deck (equivalent to hanab.live's `order`). Ids
 let clue history, replays, AI notes and UI animations follow a specific card as it moves between zones.
@@ -129,6 +131,11 @@ type Action =
 `{ type: "play", seat, cardId, card, success: false, drawn }`. Events reveal what the action uncovered
 (the identity of a played or discarded card, which cards a clue touched). AIs observe events, and the UI
 animates them, so nobody has to diff states.
+
+`applyEvent(moment, event)` applies one event's public effects to a `Moment` (the public table: hands,
+stacks, discard pile and clue knowledge), and `history(state or view)` folds the log over `opening` to
+get the table before every event. A property test checks that the rebuilt tables match every state the
+reducer produced, so the two can't drift apart.
 
 ### Hidden information
 
@@ -216,7 +223,7 @@ Only H-Group is supported. There is no abstract "convention set" interface.
   changes. A property test checks that a card's real identity is always among its possibilities.
 - **Common knowledge:** what every player agrees each card could be once conventions are applied. It is
   what lets the engine predict how a receiver will read a clue before suggesting it. `readGame(view,
-level)` builds it: `history(view)` rebuilds the public table before every event in the log, and each
+level)` builds it: the engine's `history(view)` gives the public table before every event in the log, and each
   clue is read (`readClue`) on the table it was given on. Cards that start the game already clued (as
   test scenarios allow) begin from their clues, with Good Touch applied but no reading. The same `readClue` predicts how a clue the
   viewer is considering would be read.

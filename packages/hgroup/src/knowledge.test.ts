@@ -185,15 +185,12 @@ describe("save clues", () => {
   it("read a color clue on chop as a play clue or a Critical Save", () => {
     const game = deal({
       hands: [
-        ["b4", "r2", "y2", "g1", "p2"],
+        ["r2", "y2", "g1", "p2", "r4"],
         ["r3", "y3", "p1", "b4", "g5*"],
       ],
       stacks: { red: 1, yellow: 1, blue: 1 },
-      clueTokens: 7,
-    })
-      .discard(0) // Setup only: puts the other b4 in the discard pile.
-      .clue(ALICE, 2) // Setup only: passes the turn, not a conventional clue.
-      .clue(BOB, "blue");
+      discardPile: ["b4"],
+    }).clue(BOB, "blue");
     const reading = lastReading(game, BOB);
     expect(reading).toMatchObject({ focus: game.cardAt(3, BOB), play: ["b2"], save: ["b4"] });
     expect(reading.conventions).toEqual(["clue-focus", "save-clue", "critical-save", "play-clue"]);
@@ -206,15 +203,12 @@ describe("save clues", () => {
   it("leave the other touched cards as any card of the clue that is not trash", () => {
     const game = deal({
       hands: [
-        ["b3", "r4", "y2", "g1", "p2"],
+        ["r4", "y2", "g1", "p2", "y4"],
         ["b4", "r3", "g1", "b4", "b3"],
       ],
       stacks: { red: 3, green: 2, blue: 1 },
-      clueTokens: 7,
-    })
-      .discard(0) // Setup only: puts the other b3 in the discard pile.
-      .clue(ALICE, 2) // Setup only: passes the turn, not a conventional clue.
-      .clue(BOB, "blue");
+      discardPile: ["b3"],
+    }).clue(BOB, "blue");
     expect(lastReading(game, BOB)).toMatchObject({ play: ["b2"], save: ["b3"] });
     expect(common(game, BOB, game.cardAt(4, BOB))).toEqual(["b2", "b3"]);
     expect(common(game, BOB, game.cardAt(0, BOB))).toEqual(["b2", "b3", "b4", "b5"]);

@@ -270,6 +270,8 @@ easy to add later. That converter is not part of the engine phase.
   Hand cards can start already clued: `"r*4"` is a red 4 whose color is known, `"r4*"` one whose rank
   is known, and `"r*4*"` both. Those clues are on the card from the start with no logged clue and no
   negative information on other cards, so a test shows the situation under test without setup clues.
+  A `discardPile` (oldest first) starts the game with those cards already discarded: they come out of
+  the deck, nothing is logged and clue tokens are unchanged, so no setup discards are needed.
 - Property tests with fast-check: random legal games must preserve invariants (cards are conserved,
   clue tokens stay within 0 to 8, score never decreases, the game always terminates, `validate` and
   `legalActions` agree, views never leak hidden cards). The random games

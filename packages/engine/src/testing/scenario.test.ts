@@ -57,6 +57,50 @@ describe("deal", () => {
     expect(() => deal({ hands: start().hands, stacks: { rd: 3 } })).toThrow("Unknown suit rd");
   });
 
+  describe("starting discard pile", () => {
+    const hands = start().hands;
+
+    it("starts with the given cards discarded, oldest first", () => {
+      const game = deal({ hands, discardPile: ["b5", "r1", "g4"] });
+      expect(game.state.discardPile.map((id) => game.name(id))).toEqual(["b5", "r1", "g4"]);
+      expect(game.state.drawPile).toHaveLength(50 - 10 - 3);
+      expect(game.state.clueTokens).toBe(8);
+      expect(game.events).toEqual([]);
+    });
+
+    it("takes the discarded cards out of the deck", () => {
+      const game = deal({ hands, discardPile: ["b5"] });
+      expect(game.state.drawPile.map((id) => game.name(id))).not.toContain("b5");
+      // Alice holds one of the three r1s, so only two can be discarded.
+      expect(() => deal({ hands, discardPile: ["r1", "r1", "r1"] })).toThrow(
+        "No r1 left in the deck",
+      );
+    });
+
+    it("puts unnamed cards after the given discards when the draw pile is given", () => {
+      const game = deal({ hands, drawPile: ["p1"], discardPile: ["b5", "g5"] });
+      expect(game.state.drawPile.map((id) => game.name(id))).toEqual(["p1"]);
+      expect(game.state.discardPile).toHaveLength(50 - 10 - 1);
+      expect(game.state.discardPile.slice(0, 2).map((id) => game.name(id))).toEqual(["b5", "g5"]);
+    });
+
+    it("keeps cards conserved alongside stacks", () => {
+      const game = deal({ hands: [["g1", "g2", "g3", "g4", "g5"], hands[1]!], stacks: { red: 2 } });
+      const withDiscards = deal({
+        hands: [["g1", "g2", "g3", "g4", "g5"], hands[1]!],
+        stacks: { red: 2 },
+        discardPile: ["r3", "r3"],
+      });
+      expect(withDiscards.state.drawPile).toHaveLength(game.state.drawPile.length - 2);
+      expect(withDiscards.state.stacks.red).toBe(2);
+      const all = [...withDiscards.state.drawPile, ...withDiscards.state.discardPile];
+      expect(all.map((id) => withDiscards.name(id)).filter((n) => n === "r3")).toEqual([
+        "r3",
+        "r3",
+      ]);
+    });
+  });
+
   describe("pre-clued cards", () => {
     const game = deal({
       hands: [

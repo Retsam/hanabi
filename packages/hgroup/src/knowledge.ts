@@ -5,6 +5,7 @@ import {
   type Card,
   type CardId,
   type Clue,
+  type GameEvent,
   history,
   type Moment,
   type PlayerView,
@@ -28,6 +29,11 @@ export interface Table {
   readonly moment: Moment;
   /** Common knowledge: what every player agrees each card could be, indexed by `CardId`. */
   readonly common: readonly (readonly Card[])[];
+  /**
+   * Unclued cards every player agrees are finessed: they will blind-play, so they count as clued.
+   * See `finessed-cards-count-as-clued`.
+   */
+  readonly finessed: readonly CardId[];
 }
 
 /** A clue as given (or as it would be given): who to whom, and the cards it touched, leftmost first. */
@@ -38,19 +44,44 @@ export interface GivenClue {
   readonly touched: readonly CardId[];
 }
 
-/** One way a clue can be read: what its focus is, and as which kind of clue. */
+/**
+ * A card that has to play before a play clue's focus can, and that the table doesn't already know
+ * about: a clued card that could be it (a prompt), or an unclued card that blind-plays (a finesse).
+ */
+export interface Connection {
+  readonly kind: "prompt" | "finesse";
+  /** Who holds the connecting card. */
+  readonly seat: Seat;
+  /** The card that has to play. */
+  readonly card: Card;
+  /**
+   * The cards in `seat`'s hand it could be when the clue was given, leftmost first: the clued cards
+   * that could be `card` for a prompt (the leftmost is the one to play), the finesse position for a
+   * finesse.
+   */
+  readonly ids: readonly CardId[];
+}
+
+/** One way a clue can be read: what its focus is, and what has to happen for it to be true. */
 export interface Interpretation {
   readonly kind: "play" | "save";
   /** What the focus card (`ClueReading.focus`) is under this interpretation. */
   readonly focusIdentity: Card;
+  /** The cards that must play first, beyond the clued cards the table already knows. */
+  readonly connections: readonly Connection[];
   readonly conventions: readonly ConventionId[];
+  /** The turn whose event showed this interpretation is wrong, or null while it is still possible. */
+  readonly ruledOutOn: number | null;
 }
 
 /** How the table reads a clue. */
 export interface ClueReading extends GivenClue {
   /** The card the clue is about. See `clue-focus`. */
   readonly focus: CardId;
-  /** Every way the table could read the clue. */
+  /**
+   * Every way the table could read the clue when it was given. Later moves rule some out (see
+   * `readGame`); the rest stay pending.
+   */
   readonly interpretations: readonly Interpretation[];
   /**
    * The conventions the reading used. When there are no interpretations the clue means nothing at
@@ -59,18 +90,30 @@ export interface ClueReading extends GivenClue {
   readonly conventions: readonly ConventionId[];
 }
 
-/** The table now, plus how every clue so far was read. */
-export interface Knowledge extends Table {
-  /** One reading per clue in the log, oldest first, with the turn it was given on. */
-  readonly readings: readonly (ClueReading & { readonly turn: number })[];
+/** A clue's reading, with the turn it was given on. */
+export interface PastReading extends ClueReading {
+  readonly turn: number;
 }
 
+/** The table now, plus how every clue so far was read. */
+export interface Knowledge extends Table {
+  /**
+   * One reading per clue in the log, oldest first. Interpretations ruled out since are marked with
+   * the turn that ruled them out.
+   */
+  readonly readings: readonly PastReading[];
+}
+
+/** A reading's interpretations that have not been ruled out. */
+const pending = (reading: ClueReading) =>
+  reading.interpretations.filter((interpretation) => interpretation.ruledOutOn === null);
+
 /**
- * What the focus could be under `reading`'s interpretations, each card once: under any of them, or
- * only the play or save ones.
+ * What the focus could be under `reading`'s interpretations that have not been ruled out, each card
+ * once: under any of them, or only the play or save ones.
  */
 export function focusCards(reading: ClueReading, kind?: Interpretation["kind"]): Card[] {
-  const cards = reading.interpretations
+  const cards = pending(reading)
     .filter((interpretation) => kind === undefined || interpretation.kind === kind)
     .map((interpretation) => interpretation.focusIdentity);
   return uniqBy(cards, sameCard);
@@ -90,31 +133,53 @@ const key = (card: Card) => `${card.suit} ${card.rank}`;
 const isClued = (moment: Moment, id: CardId) => moment.clues[id]!.touchedBy.length > 0;
 
 /**
+ * A seat's finesse position: their leftmost unclued card, with finessed cards counting as clued.
+ * Undefined if there is none. See `finesse-position`.
+ */
+export function finessePosition(
+  table: Pick<Table, "moment" | "finessed">,
+  seat: Seat,
+): CardId | undefined {
+  const { moment, finessed } = table;
+  return moment.hands[seat]!.find((id) => !isClued(moment, id) && !finessed.includes(id));
+}
+
+/** Whether `card` is on its stack already. */
+const hasPlayed = (moment: Moment, card: Card) => (moment.stacks[card.suit] ?? 0) >= card.rank;
+
+/**
  * Replays the view's log, reading every clue at the table's `level` to build common knowledge.
- * Deterministic, and judged only from what the viewer can see (see `readClue` for the one
- * approximation that involves the viewer's own hand).
+ * After each event, the interpretations it rules out are marked and common knowledge narrows to what
+ * the rest allow. Deterministic, and the same from every seat's view: only public information is used.
  */
 export function readGame(view: PlayerView, level: Level): Knowledge {
   const moments = history(view);
   // Cards can start the game already clued (in test scenarios), with no logged clue to read.
-  const start = { level, moment: moments[0]!, common: startingNotes(view, moments[0]!) };
-  let common = settle(view, start);
-  const readings: (ClueReading & { turn: number })[] = [];
+  const opening = { level, moment: moments[0]!, finessed: [] };
+  let table: Table = {
+    ...opening,
+    common: settle(view, { ...opening, common: startingNotes(view, opening.moment) }),
+  };
+  let readings: PastReading[] = [];
 
   for (const [turn, event] of view.log.entries()) {
-    const moment = moments[turn]!;
+    let common: (readonly Card[])[];
     if (event.type === "clue") {
-      const table = { level, moment, common };
       const { seat: giver, target, clue, touched } = event;
       const reading = readClue(view, table, { giver, target, clue, touched });
-      readings.push({ ...reading, turn });
+      readings = [...readings, { ...reading, turn }];
       common = applyReading(view, table, reading);
     } else {
-      common = common.with(event.cardId, [event.card]);
+      common = table.common.with(event.cardId, [event.card]);
     }
-    common = settle(view, { level, moment: moments[turn + 1]!, common });
+    ({ table, readings } = resolve(
+      view,
+      { ...table, moment: moments[turn + 1]!, common },
+      readings,
+      { turn, event },
+    ));
   }
-  return { level, moment: moments.at(-1)!, common, readings };
+  return { ...table, readings };
 }
 
 /** Each card's clue possibilities at `moment`, shared between cards with no clues. */
@@ -131,77 +196,146 @@ function startingNotes(view: PlayerView, moment: Moment): (readonly Card[])[] {
  * Reads a clue on `table`, the moment before it is given. Used both for clues in the log and to
  * predict how a clue the viewer is considering would be read.
  *
- * The receiver reads the clue using every clued card they can identify: cards in other hands by
- * sight, and cards in their own hand by common knowledge. The viewer can't see their own hand, so
- * when the viewer is not the receiver, a play clue may also be delayed through any card the
- * viewer's unidentified clued cards could be: the reading is then a superset of the receiver's.
+ * The reading is common knowledge: it lists every interpretation the table can't rule out from
+ * public information. A player narrows it further with the cards they see (`privateKnowledge`).
  */
 export function readClue(view: PlayerView, table: Table, given: GivenClue): ClueReading {
-  const { level, moment, common } = table;
+  const { level, moment, common, finessed } = table;
   const { target, clue, touched } = given;
-  const facts = tableFacts(view, table, target);
+  const facts = tableFacts(view, table);
 
-  const newlyTouched = touched.filter((id) => !isClued(moment, id));
+  const newlyTouched = touched.filter((id) => !isClued(moment, id) && !finessed.includes(id));
   const chopId = chop(moment, target);
   const onChop = chopId !== null && newlyTouched.includes(chopId);
   const focus = newlyTouched.length === 0 ? touched[0]! : onChop ? chopId : newlyTouched[0]!;
-  const reading = { ...given, focus };
-  if (!applies("clue-focus", level) || !applies("play-clue", level)) {
-    return { ...reading, interpretations: [], conventions: [] };
-  }
+  const interpretations: Interpretation[] = [];
+  const offConvention = { ...given, focus, interpretations, conventions: [] };
+  if (!applies("clue-focus", level) || !applies("play-clue", level)) return offConvention;
 
   const candidates = common[focus]!.filter((card) => clueMatches(card, clue));
-  const playable = candidates.filter((card) => facts.playable.some((next) => sameCard(next, card)));
-  const conventions: ConventionId[] = ["clue-focus"];
-  let play: Card[] = playable;
-  let save: Card[] = [];
-  const saveConventions: ConventionId[] = ["save-clue"];
+  const could = (card: Card) => candidates.some((other) => sameCard(other, card));
+  const add = (
+    kind: Interpretation["kind"],
+    card: Card,
+    conventions: ConventionId[],
+    connections: Connection[] = [],
+  ) =>
+    interpretations.push({ kind, focusIdentity: card, connections, conventions, ruledOutOn: null });
 
+  /** Who could be holding `card` for this clue, as a prompt or a finesse. */
+  const connect = (card: Card) => connectionsFor(view, table, given, focus, card, facts);
+
+  let plays = true;
   if (onChop && applies("save-clue", level)) {
-    if (clue.kind === "rank" && clue.value === 5 && applies("5-save", level)) {
-      [play, save] = [[], candidates.filter((card) => !facts.isTrash(card, focus))];
-      saveConventions.push("5-save");
-    } else if (clue.kind === "rank" && clue.value === 2 && applies("2-save", level)) {
-      [play, save] = [[], candidates.filter((card) => !facts.isTrash(card, focus))];
-      saveConventions.push("2-save");
+    const rankSave =
+      clue.kind === "rank" && clue.value === 5 && applies("5-save", level)
+        ? "5-save"
+        : clue.kind === "rank" && clue.value === 2 && applies("2-save", level)
+          ? "2-save"
+          : undefined;
+    if (rankSave !== undefined) {
+      // A 5 or 2 clue on chop is a save, never a play clue.
+      plays = false;
+      for (const card of candidates) {
+        if (!facts.isTrash(card, focus)) add("save", card, ["save-clue", rankSave]);
+      }
     } else if (applies("critical-save", level)) {
       // A 5 is only saved with a 5 clue; any other clue on it is a play clue.
-      save = candidates.filter((card) => card.rank !== 5 && facts.isCritical(card));
-      saveConventions.push("critical-save");
+      for (const card of candidates) {
+        if (card.rank !== 5 && facts.isCritical(card)) {
+          add("save", card, ["save-clue", "critical-save"]);
+        }
+      }
     }
   }
-  if (save.length > 0) conventions.push(...saveConventions);
-  const playableNow = (card: Card) => card.rank === (moment.stacks[card.suit] ?? 0) + 1;
-  if (!applies("delayed-play-clue", level)) play = play.filter(playableNow);
-  if (play.length > 0) conventions.push("play-clue");
-  if (!play.every(playableNow)) conventions.push("delayed-play-clue");
-  const othersTouched = newlyTouched.some((id) => id !== focus);
-  if (othersTouched && applies("good-touch", level) && (play.length > 0 || save.length > 0)) {
-    conventions.push("good-touch");
+  for (const suit of plays ? view.config.suits : []) {
+    const next = facts.next(suit);
+    if (next === undefined) continue;
+    const now = next.rank === (moment.stacks[suit] ?? 0) + 1;
+    if (could(next) && now) add("play", next, ["play-clue"]);
+    if (could(next) && !now && applies("delayed-play-clue", level)) {
+      add("play", next, ["play-clue", "delayed-play-clue"]);
+    }
+    // One card further on, if a prompt or a finesse can supply the card in between.
+    const beyond = RANKS.find((rank) => rank === next.rank + 1);
+    if (beyond === undefined) continue;
+    const card = { suit, rank: beyond };
+    if (!could(card) || facts.isTrash(card, focus)) continue;
+    for (const { connection, conventions } of connect(next)) {
+      add("play", card, ["play-clue", ...conventions], [connection]);
+    }
   }
-  const interpretations: Interpretation[] = [
-    ...save.map((card) => ({
-      kind: "save" as const,
-      focusIdentity: card,
-      conventions: saveConventions,
-    })),
-    ...play.map((card) => ({
-      kind: "play" as const,
-      focusIdentity: card,
-      conventions: playableNow(card)
-        ? (["play-clue"] as const)
-        : (["play-clue", "delayed-play-clue"] as const),
-    })),
-  ];
-  const meansSomething = interpretations.length > 0;
-  return { ...reading, interpretations, conventions: meansSomething ? conventions : [] };
+
+  if (interpretations.length === 0) return offConvention;
+  const conventions: ConventionId[] = ["clue-focus"];
+  for (const id of interpretations.flatMap((interpretation) => interpretation.conventions)) {
+    if (!conventions.includes(id)) conventions.push(id);
+  }
+  const othersTouched = newlyTouched.some((id) => id !== focus);
+  if (othersTouched && applies("good-touch", level)) conventions.push("good-touch");
+  return { ...given, focus, interpretations, conventions };
+}
+
+/**
+ * The ways `card` could be supplied so that a play clue on the card after it makes sense, in turn
+ * order from the clue giver. Level 1 allows one such card per clue:
+ *
+ * - A prompt: any seat but the giver's (the receiver's included) has clued cards that could be
+ *   `card`. If those cards were going to play anyway it is a delayed play clue, not a prompt.
+ * - A finesse: a seat that plays after the giver and before the receiver has no such clued card
+ *   (`prompts-before-finesses`), and `card` is playable now, so their finesse position blind-plays.
+ */
+function connectionsFor(
+  view: PlayerView,
+  table: Table,
+  given: GivenClue,
+  focus: CardId,
+  card: Card,
+  facts: TableFacts,
+): { connection: Connection; conventions: ConventionId[] }[] {
+  const { level, moment, common } = table;
+  const { giver, target } = given;
+  const players = view.config.numPlayers;
+  const receiverStep = (target - giver + players) % players;
+  const result: { connection: Connection; conventions: ConventionId[] }[] = [];
+
+  for (let step = 1; step < players; step++) {
+    const seat = (giver + step) % players;
+    const beforeReceiver = step < receiverStep;
+    const ids = moment.hands[seat]!.filter(
+      (id) =>
+        id !== focus && isClued(moment, id) && common[id]!.some((other) => sameCard(other, card)),
+    );
+    if (ids.length > 0) {
+      const anyway = ids.every((id) => common[id]!.every((other) => facts.isNext(other)));
+      const kind = anyway ? "delayed-play-clue" : "prompt";
+      if (!applies(kind, level)) continue;
+      const conventions: ConventionId[] = [kind];
+      if (!anyway && beforeReceiver && applies("prompts-before-finesses", level)) {
+        conventions.push("prompts-before-finesses");
+      }
+      result.push({ connection: { kind: "prompt", seat, card, ids }, conventions });
+    } else if (
+      beforeReceiver &&
+      applies("finesse", level) &&
+      card.rank === (moment.stacks[card.suit] ?? 0) + 1
+    ) {
+      const id = finessePosition(table, seat);
+      if (id === undefined) continue;
+      result.push({
+        connection: { kind: "finesse", seat, card, ids: [id] },
+        conventions: ["finesse", "finesse-position"],
+      });
+    }
+  }
+  return result;
 }
 
 /** Common knowledge after `reading`'s clue, on the table it was given on. */
 function applyReading(view: PlayerView, table: Table, reading: ClueReading): (readonly Card[])[] {
   const { moment, level } = table;
   const common = [...table.common];
-  const facts = tableFacts(view, table, reading.target);
+  const facts = tableFacts(view, table);
   const meant = focusCards(reading);
   const focusIs = meant.length === 1 ? meant[0] : undefined;
 
@@ -232,6 +366,146 @@ function applyReading(view: PlayerView, table: Table, reading: ClueReading): (re
 }
 
 /**
+ * Brings knowledge up to date after an event: settles common knowledge, rules out the
+ * interpretations the table now contradicts, narrows each pending clue to what its remaining
+ * interpretations allow, and works out which cards are finessed. Repeats until nothing changes.
+ */
+function resolve(
+  view: PlayerView,
+  table: Table,
+  readings: PastReading[],
+  last: { turn: number; event: GameEvent },
+): { table: Table; readings: PastReading[] } {
+  for (;;) {
+    const settled = { ...table, common: settle(view, table) };
+    const ruled = ruleOut(settled, readings, last);
+    const next = { ...settled, ...narrow(settled, ruled) };
+    const same =
+      ruled === readings &&
+      next.finessed.length === table.finessed.length &&
+      next.common.every((note, id) => note.length === table.common[id]!.length);
+    if (same) return { table: next, readings };
+    [table, readings] = [next, ruled];
+  }
+}
+
+/**
+ * Marks the interpretations `last` (the latest event) leaves impossible: the focus can no longer be
+ * the card the interpretation says, a connecting card can no longer be anywhere it was promised, or
+ * a finessed player took their turn without blind-playing the card (finesses are urgent). Returns
+ * `readings` itself if nothing changed.
+ */
+function ruleOut(
+  table: Table,
+  readings: PastReading[],
+  last: { turn: number; event: GameEvent },
+): PastReading[] {
+  const possible = (reading: PastReading, interpretation: Interpretation) =>
+    interpretation.ruledOutOn !== null ||
+    (table.common[reading.focus]!.some((card) => sameCard(card, interpretation.focusIdentity)) &&
+      interpretation.connections.every((connection) => {
+        if (hasPlayed(table.moment, connection.card)) return true;
+        const acted = last.turn > reading.turn && last.event.seat === connection.seat;
+        if (connection.kind === "finesse" && acted) return false;
+        return connectingCards(table, connection).length > 0;
+      }));
+  const result = readings.map((reading) => {
+    if (reading.interpretations.every((interpretation) => possible(reading, interpretation))) {
+      return reading;
+    }
+    const interpretations = reading.interpretations.map((interpretation) =>
+      possible(reading, interpretation)
+        ? interpretation
+        : { ...interpretation, ruledOutOn: last.turn },
+    );
+    return { ...reading, interpretations };
+  });
+  return result.every((reading, i) => reading === readings[i]) ? readings : result;
+}
+
+/** The cards in `connection`'s hand that could still be its card, leftmost first. */
+function connectingCards(
+  table: Pick<Table, "moment" | "common">,
+  connection: Connection,
+): CardId[] {
+  const hand = table.moment.hands[connection.seat]!;
+  return connection.ids.filter(
+    (id) => hand.includes(id) && table.common[id]!.some((card) => sameCard(card, connection.card)),
+  );
+}
+
+/**
+ * Common knowledge narrowed to what each clue's remaining interpretations allow, and the cards they
+ * all agree are finessed.
+ */
+function narrow(
+  table: Table,
+  readings: readonly PastReading[],
+): { common: (readonly Card[])[]; finessed: CardId[] } {
+  const common = [...table.common];
+  const finessed: CardId[] = [];
+  for (const reading of readings) {
+    const live = pending(reading);
+    if (live.length === 0) continue;
+    narrowNote(
+      common,
+      reading.focus,
+      live.map((interpretation) => interpretation.focusIdentity),
+    );
+    for (const [id, cards] of pinned(table, live, () => true)) narrowNote(common, id, cards);
+    finessed.push(...finessedBy(table, live));
+  }
+  return { common, finessed };
+}
+
+/** Narrows `notes[id]` to `cards`, unless that would leave nothing. */
+function narrowNote(notes: (readonly Card[])[], id: CardId, cards: readonly Card[]) {
+  const note = notes[id]!.filter((card) => cards.some((other) => sameCard(other, card)));
+  if (note.length > 0) notes[id] = note;
+}
+
+/**
+ * The connecting cards that every one of `live` pins down, with what each interpretation says they
+ * are. A connection pins a card when exactly one card could still be it; `could` says which cards
+ * can.
+ */
+function pinned(
+  table: Table,
+  live: readonly Interpretation[],
+  could: (id: CardId, card: Card) => boolean,
+): Map<CardId, Card[]> {
+  const pins = live.map((interpretation) => {
+    const pinsHere = new Map<CardId, Card>();
+    for (const connection of interpretation.connections) {
+      if (hasPlayed(table.moment, connection.card)) continue;
+      const ids = connectingCards(table, connection).filter((id) => could(id, connection.card));
+      if (ids.length === 1) pinsHere.set(ids[0]!, connection.card);
+    }
+    return pinsHere;
+  });
+  const result = new Map<CardId, Card[]>();
+  for (const id of pins[0]!.keys()) {
+    if (pins.every((pin) => pin.has(id)))
+      result.set(
+        id,
+        pins.map((pin) => pin.get(id)!),
+      );
+  }
+  return result;
+}
+
+/** The cards that every one of `live` finesses, while they are still waiting to blind-play. */
+function finessedBy(table: Table, live: readonly Interpretation[]): CardId[] {
+  const inHand = new Set(table.moment.hands.flat());
+  const finesses = live.map((interpretation) =>
+    interpretation.connections
+      .filter(({ kind, card }) => kind === "finesse" && !hasPlayed(table.moment, card))
+      .map(({ ids }) => ids[0]!),
+  );
+  return finesses[0]!.filter((id) => inHand.has(id) && finesses.every((ids) => ids.includes(id)));
+}
+
+/**
  * Narrows common knowledge with what follows from it, repeating until nothing changes: an identity
  * is ruled out once every copy is accounted for in public (played, discarded or known to be another
  * card in a hand), and under Good Touch no two clued cards are the same identity. A note is never
@@ -241,8 +515,9 @@ function settle(view: PlayerView, table: Table): (readonly Card[])[] {
   const { moment, level, config } = { ...table, config: view.config };
   const common = [...table.common];
   const inHand = new Set(moment.hands.flat());
-  // Cards out of every hand are public once anyone can see them (the draw pile is hidden).
-  for (const { id, card } of view.cards) if (!inHand.has(id) && card !== null) common[id] = [card];
+  // Discarded cards are public. (Played cards are filled in from their play events. A card in the
+  // draw pile then may be visible to the viewer now, but it was hidden from the table.)
+  for (const id of moment.discardPile) common[id] = [view.cards[id]!.card!];
 
   const known = (id: CardId) => (common[id]!.length === 1 ? common[id]![0] : undefined);
   let changed = true;
@@ -282,51 +557,68 @@ function settle(view: PlayerView, table: Table): (readonly Card[])[] {
 /**
  * What the viewer knows about each card, indexed by `CardId`: common knowledge, narrowed by the
  * cards the viewer can see. Visible cards are known exactly. Under Good Touch the viewer's clued
- * cards are also not any clued card they can see in another hand.
+ * cards are also not any clued card they can see in another hand. Each pending clue keeps only the
+ * interpretations that fit what the viewer knows, which can pin down the focus or a connecting card:
+ * a player who sees the focus of a clue knows whether they were prompted or finessed.
  */
 export function privateKnowledge(view: PlayerView, knowledge: Knowledge): (readonly Card[])[] {
-  const { moment, common, level } = knowledge;
+  const { moment, common, level, readings } = knowledge;
   const visibleClued = moment.hands
     .flatMap((hand, seat) => (seat === view.seat ? [] : hand))
     .filter((id) => isClued(moment, id))
     .map((id) => view.cards[id]!.card!);
-  return possibilities(view, (id) => {
+  let known = possibilities(view, (id) => {
     const note = common[id]!;
     if (!isClued(moment, id) || !applies("good-touch", level)) return note;
     const narrowed = note.filter((card) => !visibleClued.some((seen) => sameCard(seen, card)));
     return narrowed.length > 0 ? narrowed : note;
   });
+
+  // If the table misread a clue, what the viewer sees can rule out every card the table allows.
+  // Such a card falls back to what the rules allow.
+  const rules = possibilities(view);
+  const fallBack = (notes: (readonly Card[])[]) =>
+    notes.map((note, id) => (note.length > 0 ? note : rules[id]!));
+  known = fallBack(known);
+  const could = (id: CardId, card: Card) => known[id]!.some((other) => sameCard(other, card));
+  for (;;) {
+    const notes = [...known];
+    for (const reading of readings) {
+      const live = pending(reading).filter(
+        (interpretation) =>
+          could(reading.focus, interpretation.focusIdentity) &&
+          interpretation.connections.every(
+            (connection) =>
+              hasPlayed(moment, connection.card) ||
+              connectingCards(knowledge, connection).some((id) => could(id, connection.card)),
+          ),
+      );
+      if (live.length === 0) continue;
+      narrowNote(
+        notes,
+        reading.focus,
+        live.map((interpretation) => interpretation.focusIdentity),
+      );
+      for (const [id, cards] of pinned(knowledge, live, could)) narrowNote(notes, id, cards);
+    }
+    const next = fallBack(possibilities(view, (id) => notes[id]!));
+    if (next.every((note, id) => note.length === known[id]!.length)) return next;
+    known = next;
+  }
 }
 
-/** Facts about the table as `receiver` would see them. */
-function tableFacts(view: PlayerView, table: Table, receiver: Seat) {
-  const { moment, common } = table;
-  const { config } = view;
-  const ownHand = moment.hands[receiver]!;
+type TableFacts = ReturnType<typeof tableFacts>;
 
-  /** A card's identity as the receiver knows it, if they do. */
-  const knownToReceiver = (id: CardId): Card | undefined => {
-    const seen = ownHand.includes(id) ? null : view.cards[id]!.card;
-    if (seen) return seen;
-    const note = common[id]!;
-    return note.length === 1 ? note[0] : undefined;
-  };
-  /** Clued cards in any hand that the receiver can identify. */
+/** Facts about the table that every player agrees on. */
+function tableFacts(view: PlayerView, table: Table) {
+  const { moment, common, finessed } = table;
+  const { config } = view;
+
+  /** Clued (or finessed) cards whose identity the whole table knows. */
   const gotten = moment.hands
     .flat()
-    .filter((id) => isClued(moment, id))
-    .flatMap((id) => {
-      const card = knownToReceiver(id);
-      return card ? [{ id, card }] : [];
-    });
-  // The receiver can see the viewer's clued cards, but the viewer can't. Any identity the table
-  // allows for one of them might be a clued card the receiver is counting on.
-  const unidentified =
-    receiver === view.seat
-      ? []
-      : moment.hands[view.seat]!.filter((id) => isClued(moment, id) && common[id]!.length > 1);
-  const maybeGotten = (card: Card) =>
-    unidentified.some((id) => common[id]!.some((other) => sameCard(other, card)));
+    .filter((id) => isClued(moment, id) || finessed.includes(id))
+    .flatMap((id) => (common[id]!.length === 1 ? [{ id, card: common[id]![0]! }] : []));
   const discarded = (card: Card) =>
     moment.discardPile.filter((id) => sameCard(view.cards[id]!.card!, card)).length;
   const stack = (card: Card) => moment.stacks[card.suit] ?? 0;
@@ -340,24 +632,27 @@ function tableFacts(view: PlayerView, table: Table, receiver: Seat) {
     });
   };
 
+  /**
+   * The card `suit` needs next once every gotten card has played: what a play clue in that suit can
+   * be on without a prompt or finesse. Undefined if the suit can't go further.
+   */
+  const next = (suit: string): Card | undefined => {
+    for (const rank of RANKS) {
+      const card = { suit, rank };
+      if (rank <= stack(card) || gotten.some((got) => sameCard(got.card, card))) continue;
+      return reachable(card) ? card : undefined;
+    }
+    return undefined;
+  };
+
   return {
-    /**
-     * The card each suit needs next once every clued card the receiver can identify has played:
-     * what a play clue can be on, now or delayed. A suit can offer more than one card when the
-     * chain runs through one of the viewer's clued cards that only the receiver can see.
-     */
-    playable: config.suits.flatMap((suit) => {
-      const next: Card[] = [];
-      for (const rank of RANKS) {
-        const card = { suit, rank };
-        if (rank <= stack(card) || gotten.some((got) => sameCard(got.card, card))) continue;
-        if (!reachable(card)) break;
-        next.push(card);
-        if (!maybeGotten(card)) break;
-      }
-      return next;
-    }),
-    /** Trash: can never play, or another clued card (not `self`) is already this card. */
+    next,
+    /** Whether `card` is the next card its suit needs. */
+    isNext: (card: Card) => {
+      const needed = next(card.suit);
+      return needed !== undefined && sameCard(needed, card);
+    },
+    /** Trash: can never play, or another gotten card (not `self`) is already this card. */
     isTrash: (card: Card, self: CardId) =>
       !reachable(card) ||
       gotten.some(({ id, card: other }) => id !== self && sameCard(other, card)),

@@ -11,10 +11,13 @@ export { applies, CONVENTION_LEVELS, type ConventionId, type Level } from "./con
 export {
   chop,
   type ClueReading,
+  type Connection,
+  finessePosition,
   focusCards,
   type GivenClue,
   type Interpretation,
   type Knowledge,
+  type PastReading,
   privateKnowledge,
   readClue,
   readGame,

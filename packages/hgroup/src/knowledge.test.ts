@@ -3,7 +3,7 @@
 import { type Card, type CardId, playerView } from "@hanabi/engine";
 import { deal, type Scenario } from "@hanabi/engine/testing";
 import { describe, expect, it } from "vitest";
-import { chop, privateKnowledge, readGame } from "./knowledge";
+import { chop, focusCards, privateKnowledge, readGame } from "./knowledge";
 import { forRandomGames } from "./testing/randomGames";
 
 const ALICE = 0;
@@ -20,10 +20,14 @@ const read = (game: Scenario, seat: number, level = 1) =>
 /** What the table agrees a card could be, as card names. */
 const common = (game: Scenario, seat: number, id: CardId) => names(read(game, seat).common[id]!);
 
-/** The latest clue's reading as card names. */
+/** The latest clue's reading, with what its focus could be as a play or save clue as card names. */
 const lastReading = (game: Scenario, seat: number) => {
   const reading = read(game, seat).readings.at(-1)!;
-  return { ...reading, play: names(reading.play), save: names(reading.save) };
+  return {
+    ...reading,
+    play: names(focusCards(reading, "play")),
+    save: names(focusCards(reading, "save")),
+  };
 };
 
 describe("chop", () => {
@@ -194,6 +198,14 @@ describe("save clues", () => {
     const reading = lastReading(game, BOB);
     expect(reading).toMatchObject({ focus: game.cardAt(3, BOB), play: ["b2"], save: ["b4"] });
     expect(reading.conventions).toEqual(["clue-focus", "save-clue", "critical-save", "play-clue"]);
+    expect(reading.interpretations).toEqual([
+      {
+        kind: "save",
+        focus: { suit: "blue", rank: 4 },
+        conventions: ["save-clue", "critical-save"],
+      },
+      { kind: "play", focus: { suit: "blue", rank: 2 }, conventions: ["play-clue"] },
+    ]);
     expect(common(game, BOB, game.cardAt(3, BOB))).toEqual(["b2", "b4"]);
     // The 5 Save card was not touched by blue.
     expect(common(game, BOB, game.cardAt(4, BOB))).toEqual(["r5", "y5", "g5", "p5"]);

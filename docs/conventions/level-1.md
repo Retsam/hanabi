@@ -13,10 +13,11 @@ arrive with the ranked output in step 4.
 
 ## How a clue is read
 
-`readClue` reads one clue from the table as it was just before the clue. Every reading has a focus, a
-set of identities the focus could be as a play clue (`play`) and a set it could be as a save clue
-(`save`). The focus's common knowledge becomes the union of the two. When both are empty the clue is
-off-convention: it means nothing at the table's level and only its rules-level information is kept.
+`readClue` reads one clue from the table as it was just before the clue. Every reading has a focus and
+a list of interpretations, each saying what the focus is, whether as a play or a save clue, and by which
+conventions. `focusCards` collects the focus cards across them, and the focus's common knowledge becomes
+that set. When there are no interpretations the clue is off-convention: it means nothing at the table's
+level and only its rules-level information is kept.
 
 The receiver reads a clue with every clued card they can identify: cards in other hands by sight, and
 cards in their own hand only through common knowledge.

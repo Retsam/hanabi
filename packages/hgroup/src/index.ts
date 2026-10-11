@@ -11,7 +11,9 @@ export { applies, CONVENTION_LEVELS, type ConventionId, type Level } from "./con
 export {
   chop,
   type ClueReading,
+  focusCards,
   type GivenClue,
+  type Interpretation,
   type Knowledge,
   privateKnowledge,
   readClue,

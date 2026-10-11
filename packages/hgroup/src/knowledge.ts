@@ -37,17 +37,23 @@ export interface GivenClue {
   readonly touched: readonly CardId[];
 }
 
+/** One way a clue can be read: what its focus is, and as which kind of clue. */
+export interface Interpretation {
+  readonly kind: "play" | "save";
+  /** What the focus is under this interpretation. */
+  readonly focus: Card;
+  readonly conventions: readonly ConventionId[];
+}
+
 /** How the table reads a clue. */
 export interface ClueReading extends GivenClue {
   /** The card the clue is about. See `clue-focus`. */
   readonly focus: CardId;
-  /** What the focus could be if this is a play clue (immediate or delayed). Empty if it can't be. */
-  readonly play: readonly Card[];
-  /** What the focus could be if this is a save clue. Empty if it can't be. */
-  readonly save: readonly Card[];
+  /** Every way the table could read the clue. */
+  readonly interpretations: readonly Interpretation[];
   /**
-   * The conventions the reading used. When `play` and `save` are both empty the clue means nothing
-   * at the table's level: it is off-convention and carries only its rules-level information.
+   * The conventions the reading used. When there are no interpretations the clue means nothing at
+   * the table's level: it is off-convention and carries only its rules-level information.
    */
   readonly conventions: readonly ConventionId[];
 }
@@ -56,6 +62,17 @@ export interface ClueReading extends GivenClue {
 export interface Knowledge extends Table {
   /** One reading per clue in the log, oldest first, with the turn it was given on. */
   readonly readings: readonly (ClueReading & { readonly turn: number })[];
+}
+
+/**
+ * What the focus could be under `reading`'s interpretations, each card once: under any of them, or
+ * only the play or save ones.
+ */
+export function focusCards(reading: ClueReading, kind?: Interpretation["kind"]): Card[] {
+  return reading.interpretations
+    .filter((interpretation) => kind === undefined || interpretation.kind === kind)
+    .map((interpretation) => interpretation.focus)
+    .filter((card, i, all) => all.findIndex((other) => sameCard(other, card)) === i);
 }
 
 /**
@@ -127,9 +144,9 @@ export function readClue(view: PlayerView, table: Table, given: GivenClue): Clue
   const chopId = chop(moment, target);
   const onChop = chopId !== null && newlyTouched.includes(chopId);
   const focus = newlyTouched.length === 0 ? touched[0]! : onChop ? chopId : newlyTouched[0]!;
-  const reading = { ...given, focus, play: [] as Card[], save: [] as Card[] };
+  const reading = { ...given, focus };
   if (!applies("clue-focus", level) || !applies("play-clue", level)) {
-    return { ...reading, conventions: [] };
+    return { ...reading, interpretations: [], conventions: [] };
   }
 
   const candidates = common[focus]!.filter((card) => clueMatches(card, clue));
@@ -137,20 +154,22 @@ export function readClue(view: PlayerView, table: Table, given: GivenClue): Clue
   const conventions: ConventionId[] = ["clue-focus"];
   let play: Card[] = playable;
   let save: Card[] = [];
+  const saveConventions: ConventionId[] = ["save-clue"];
 
   if (onChop && applies("save-clue", level)) {
     if (clue.kind === "rank" && clue.value === 5 && applies("5-save", level)) {
       [play, save] = [[], candidates.filter((card) => !facts.isTrash(card, focus))];
-      conventions.push("save-clue", "5-save");
+      saveConventions.push("5-save");
     } else if (clue.kind === "rank" && clue.value === 2 && applies("2-save", level)) {
       [play, save] = [[], candidates.filter((card) => !facts.isTrash(card, focus))];
-      conventions.push("save-clue", "2-save");
+      saveConventions.push("2-save");
     } else if (applies("critical-save", level)) {
       // A 5 is only saved with a 5 clue; any other clue on it is a play clue.
       save = candidates.filter((card) => card.rank !== 5 && facts.isCritical(card));
-      if (save.length > 0) conventions.push("save-clue", "critical-save");
+      saveConventions.push("critical-save");
     }
   }
+  if (save.length > 0) conventions.push(...saveConventions);
   const playableNow = (card: Card) => card.rank === (moment.stacks[card.suit] ?? 0) + 1;
   if (!applies("delayed-play-clue", level)) play = play.filter(playableNow);
   if (play.length > 0) conventions.push("play-clue");
@@ -159,8 +178,18 @@ export function readClue(view: PlayerView, table: Table, given: GivenClue): Clue
   if (othersTouched && applies("good-touch", level) && (play.length > 0 || save.length > 0)) {
     conventions.push("good-touch");
   }
-  const meansSomething = play.length > 0 || save.length > 0;
-  return { ...reading, play, save, conventions: meansSomething ? conventions : [] };
+  const interpretations: Interpretation[] = [
+    ...save.map((card) => ({ kind: "save" as const, focus: card, conventions: saveConventions })),
+    ...play.map((card) => ({
+      kind: "play" as const,
+      focus: card,
+      conventions: playableNow(card)
+        ? (["play-clue"] as const)
+        : (["play-clue", "delayed-play-clue"] as const),
+    })),
+  ];
+  const meansSomething = interpretations.length > 0;
+  return { ...reading, interpretations, conventions: meansSomething ? conventions : [] };
 }
 
 /** Common knowledge after `reading`'s clue, on the table it was given on. */
@@ -168,7 +197,7 @@ function applyReading(view: PlayerView, table: Table, reading: ClueReading): (re
   const { moment, level } = table;
   const common = [...table.common];
   const facts = tableFacts(view, table, reading.target);
-  const meant = [...reading.play, ...reading.save];
+  const meant = focusCards(reading);
   const focusIs = meant.length === 1 ? meant[0] : undefined;
 
   for (const id of moment.hands[reading.target]!) {

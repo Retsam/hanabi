@@ -1,34 +1,14 @@
 // Scenario tests for level 1 clue reading, mostly taken from the H-Group beginner's guide examples.
 // See docs/conventions/level-1.md.
-import { type Card, type CardId, playerView } from "@hanabi/engine";
-import { deal, type Scenario } from "@hanabi/engine/testing";
+import { playerView } from "@hanabi/engine";
+import { deal } from "@hanabi/engine/testing";
 import { describe, expect, it } from "vitest";
-import { chop, focusCards, privateKnowledge, readGame } from "./knowledge";
+import { chop, privateKnowledge, readGame } from "./knowledge";
+import { common, lastReading, names, own, read } from "./testing/knowledge";
 import { forRandomGames } from "./testing/randomGames";
 
 const ALICE = 0;
 const BOB = 1;
-const CATHY = 2;
-
-/** Card names ("r4") for a list of identities, to keep expectations short. */
-const names = (cards: readonly Card[]) => cards.map((card) => `${card.suit[0]}${card.rank}`);
-
-/** The game read from `seat`'s view at a particular level (1 by default). */
-const read = (game: Scenario, seat: number, level = 1) =>
-  readGame(playerView(game.state, seat), level);
-
-/** What the table agrees a card could be, as card names. */
-const common = (game: Scenario, seat: number, id: CardId) => names(read(game, seat).common[id]!);
-
-/** The latest clue's reading, with what its focus could be as a play or save clue as card names. */
-const lastReading = (game: Scenario, seat: number) => {
-  const reading = read(game, seat).readings.at(-1)!;
-  return {
-    ...reading,
-    play: names(focusCards(reading, "play")),
-    save: names(focusCards(reading, "save")),
-  };
-};
 
 describe("chop", () => {
   // beginner/chop: "Without Clues" and "With Clues".
@@ -91,7 +71,7 @@ describe("play clues", () => {
   });
 
   // beginner/delayed-play-clues: Cathy holds clued 1s, so Bob's 2 may wait for them.
-  it("can be delayed through clued cards the receiver can see", () => {
+  it("can be delayed through clued cards that were going to play anyway", () => {
     const game = deal({
       hands: [
         ["r3", "r4", "p4", "p3", "g4"],
@@ -102,22 +82,11 @@ describe("play clues", () => {
     }).clue(BOB, 2);
     const reading = lastReading(game, BOB);
     expect(reading.focus).toBe(game.cardAt(2, BOB));
-    expect(reading.play).toEqual(["r2", "y2", "g2", "b2"]);
+    // Only Cathy's teammates can see her 1s, so as far as the table knows one could be the p1.
+    expect(reading.play).toEqual(["r2", "y2", "g2", "b2", "p2"]);
     expect(reading.conventions).toContain("delayed-play-clue");
-    expect(lastReading(game, ALICE).play).toEqual(["r2", "y2", "g2", "b2"]);
-  });
-
-  it("let the holder of the connecting cards allow for any of them", () => {
-    // Cathy can't see her 1s, which could include the purple 1 as far as she knows.
-    const game = deal({
-      hands: [
-        ["r3", "r4", "p4", "p3", "g4"],
-        ["p4", "y4", "b2", "y3", "g3"],
-        ["r5", "y1*", "g1*", "b1*", "b5"],
-      ],
-      stacks: { red: 1 },
-    }).clue(BOB, 2);
-    expect(lastReading(game, CATHY).play).toEqual(["r2", "y2", "g2", "b2", "p2"]);
+    // Bob sees that none of them is.
+    expect(own(game, BOB, game.cardAt(2, BOB))).toEqual(["r2", "y2", "g2", "b2"]);
   });
 
   it("are a tempo clue when they touch nothing new", () => {
@@ -202,9 +171,17 @@ describe("save clues", () => {
       {
         kind: "save",
         focusIdentity: { suit: "blue", rank: 4 },
+        connections: [],
         conventions: ["save-clue", "critical-save"],
+        ruledOutOn: null,
       },
-      { kind: "play", focusIdentity: { suit: "blue", rank: 2 }, conventions: ["play-clue"] },
+      {
+        kind: "play",
+        focusIdentity: { suit: "blue", rank: 2 },
+        connections: [],
+        conventions: ["play-clue"],
+        ruledOutOn: null,
+      },
     ]);
     expect(common(game, BOB, game.cardAt(3, BOB))).toEqual(["b2", "b4"]);
     // The 5 Save card was not touched by blue.
@@ -298,6 +275,18 @@ describe("readGame over random games", { timeout: 60_000 }, () => {
       const knowledge = readGame(view, 1);
       expect(knowledge.readings).toHaveLength(view.log.filter((e) => e.type === "clue").length);
       expect(knowledge.common.filter((note) => note.length === 0)).toEqual([]);
+      const ownNotes = privateKnowledge(view, knowledge);
+      expect(ownNotes.filter((note) => note.length === 0)).toEqual([]);
+    });
+  });
+
+  it("reads the same common knowledge from every seat", () => {
+    forRandomGames(20, ({ state }) => {
+      const [first, ...others] = state.hands.map((_, seat) => readGame(playerView(state, seat), 1));
+      for (const knowledge of others) {
+        expect(knowledge.common).toEqual(first!.common);
+        expect(knowledge.readings).toEqual(first!.readings);
+      }
     });
   });
 });

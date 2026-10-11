@@ -232,7 +232,9 @@ level)` builds it: the engine's `history(view)` gives the public table before ev
 - **Convention specs:** each implemented convention has a short spec in [conventions/](./conventions/),
   with its source, its reading and the judgment calls made where H-Group leaves room.
 - **Pending interpretations:** a clue can have several readings (a prompt or a finesse, say). Each one
-  is kept until later moves rule it out, so the review can say when an ambiguity was resolved.
+  is kept until later moves rule it out, and marked with the turn that did, so the review can say when an
+  ambiguity was resolved. Readings use only public information, so every seat reads a game the same way;
+  `privateKnowledge` keeps the interpretations that fit what one seat sees.
 - **Off-convention moves:** a teammate's move that means nothing at the table's level contributes only
   its rules-level information, and the review flags it. Mistake-recovery conventions (such as the Wrong
   Prompt) arrive as ordinary convention rules at their own levels.

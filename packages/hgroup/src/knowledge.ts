@@ -40,8 +40,8 @@ export interface GivenClue {
 /** One way a clue can be read: what its focus is, and as which kind of clue. */
 export interface Interpretation {
   readonly kind: "play" | "save";
-  /** What the focus is under this interpretation. */
-  readonly focus: Card;
+  /** What the focus card (`ClueReading.focus`) is under this interpretation. */
+  readonly focusIdentity: Card;
   readonly conventions: readonly ConventionId[];
 }
 
@@ -71,7 +71,7 @@ export interface Knowledge extends Table {
 export function focusCards(reading: ClueReading, kind?: Interpretation["kind"]): Card[] {
   return reading.interpretations
     .filter((interpretation) => kind === undefined || interpretation.kind === kind)
-    .map((interpretation) => interpretation.focus)
+    .map((interpretation) => interpretation.focusIdentity)
     .filter((card, i, all) => all.findIndex((other) => sameCard(other, card)) === i);
 }
 
@@ -179,10 +179,14 @@ export function readClue(view: PlayerView, table: Table, given: GivenClue): Clue
     conventions.push("good-touch");
   }
   const interpretations: Interpretation[] = [
-    ...save.map((card) => ({ kind: "save" as const, focus: card, conventions: saveConventions })),
+    ...save.map((card) => ({
+      kind: "save" as const,
+      focusIdentity: card,
+      conventions: saveConventions,
+    })),
     ...play.map((card) => ({
       kind: "play" as const,
-      focus: card,
+      focusIdentity: card,
       conventions: playableNow(card)
         ? (["play-clue"] as const)
         : (["play-clue", "delayed-play-clue"] as const),

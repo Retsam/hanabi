@@ -201,10 +201,10 @@ describe("save clues", () => {
     expect(reading.interpretations).toEqual([
       {
         kind: "save",
-        focus: { suit: "blue", rank: 4 },
+        focusIdentity: { suit: "blue", rank: 4 },
         conventions: ["save-clue", "critical-save"],
       },
-      { kind: "play", focus: { suit: "blue", rank: 2 }, conventions: ["play-clue"] },
+      { kind: "play", focusIdentity: { suit: "blue", rank: 2 }, conventions: ["play-clue"] },
     ]);
     expect(common(game, BOB, game.cardAt(3, BOB))).toEqual(["b2", "b4"]);
     // The 5 Save card was not touched by blue.

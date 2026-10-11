@@ -20,6 +20,7 @@ import {
   possibilities,
   sameCard,
 } from "./possibilities";
+import { uniqBy } from "./util";
 
 /** The table at one moment and what every player agreed each card could be by then. */
 export interface Table {
@@ -69,10 +70,10 @@ export interface Knowledge extends Table {
  * only the play or save ones.
  */
 export function focusCards(reading: ClueReading, kind?: Interpretation["kind"]): Card[] {
-  return reading.interpretations
+  const cards = reading.interpretations
     .filter((interpretation) => kind === undefined || interpretation.kind === kind)
-    .map((interpretation) => interpretation.focusIdentity)
-    .filter((card, i, all) => all.findIndex((other) => sameCard(other, card)) === i);
+    .map((interpretation) => interpretation.focusIdentity);
+  return uniqBy(cards, sameCard);
 }
 
 /**

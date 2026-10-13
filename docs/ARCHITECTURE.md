@@ -223,12 +223,14 @@ Only H-Group is supported. There is no abstract "convention set" interface.
   changes. A property test checks that a card's real identity is always among its possibilities.
 - **Common knowledge:** what every player agrees each card could be once conventions are applied. It is
   what lets the engine predict how a receiver will read a clue before suggesting it. `readGame(view,
-level)` builds it: the engine's `history(view)` gives the public table before every event in the log, and each
-  clue is read (`readClue`) on the table it was given on. Cards that start the game already clued (as
+level)` builds it by folding `advance(view, knowledge, event)` over the log: each event is applied to the
+  public table with the engine's `applyEvent`, and each clue is read (`readClue`) on the table it was given on.
+  `advance` also shows what an event being considered would change. Cards that start the game already clued (as
   test scenarios allow) begin from their clues, with Good Touch applied but no reading. The same `readClue` predicts how a clue the
   viewer is considering would be read.
 - **Private knowledge:** what one seat can add to common knowledge from the cards it sees
-  (`privateKnowledge`).
+  (`privateKnowledge`). It takes a `Sight` (a view's cards and config) rather than a whole view, so a
+  seat can also work out what a teammate would know.
 - **Convention specs:** each implemented convention has a short spec in [conventions/](./conventions/),
   with its source, its reading and the judgment calls made where H-Group leaves room.
 - **Pending interpretations:** a clue can have several readings (a prompt or a finesse, say). Each one

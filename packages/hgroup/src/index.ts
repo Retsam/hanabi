@@ -6,9 +6,11 @@ export {
   identities,
   possibilities,
   sameCard,
+  type Sight,
 } from "./possibilities";
 export { applies, CONVENTION_LEVELS, type ConventionId, type Level } from "./conventions";
 export {
+  advance,
   chop,
   type ClueReading,
   type Connection,

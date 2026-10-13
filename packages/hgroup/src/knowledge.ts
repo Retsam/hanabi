@@ -5,8 +5,8 @@ import {
   type Card,
   type CardId,
   type Clue,
+  applyEvent,
   type GameEvent,
-  history,
   type Moment,
   type PlayerView,
   RANKS,
@@ -20,6 +20,7 @@ import {
   identities,
   possibilities,
   sameCard,
+  type Sight,
 } from "./possibilities";
 import { uniqBy } from "./util";
 
@@ -102,6 +103,8 @@ export interface Knowledge extends Table {
    * the turn that ruled them out.
    */
   readonly readings: readonly PastReading[];
+  /** The turn the next event happens on: how many events have been read. */
+  readonly turn: number;
 }
 
 /** A reading's interpretations that have not been ruled out. */
@@ -149,37 +152,44 @@ const hasPlayed = (moment: Moment, card: Card) => (moment.stacks[card.suit] ?? 0
 
 /**
  * Replays the view's log, reading every clue at the table's `level` to build common knowledge.
- * After each event, the interpretations it rules out are marked and common knowledge narrows to what
- * the rest allow. Deterministic, and the same from every seat's view: only public information is used.
+ * Deterministic, and the same from every seat's view: only public information is used.
  */
 export function readGame(view: PlayerView, level: Level): Knowledge {
-  const moments = history(view);
   // Cards can start the game already clued (in test scenarios), with no logged clue to read.
-  const opening = { level, moment: moments[0]!, finessed: [] };
-  let table: Table = {
+  const opening = { level, moment: view.opening, finessed: [] };
+  const start: Knowledge = {
     ...opening,
     common: settle(view, { ...opening, common: startingNotes(view, opening.moment) }),
+    readings: [],
+    turn: 0,
   };
-  let readings: PastReading[] = [];
+  return view.log.reduce((knowledge, event) => advance(view, knowledge, event), start);
+}
 
-  for (const [turn, event] of view.log.entries()) {
-    let common: (readonly Card[])[];
-    if (event.type === "clue") {
-      const { seat: giver, target, clue, touched } = event;
-      const reading = readClue(view, table, { giver, target, clue, touched });
-      readings = [...readings, { ...reading, turn }];
-      common = applyReading(view, table, reading);
-    } else {
-      common = table.common.with(event.cardId, [event.card]);
-    }
-    ({ table, readings } = resolve(
-      view,
-      { ...table, moment: moments[turn + 1]!, common },
-      readings,
-      { turn, event },
-    ));
+/**
+ * Knowledge after `event`, which happens on `knowledge`'s table: a clue is read, then the
+ * interpretations the event rules out are marked and common knowledge narrows to what the rest
+ * allow. Used by `readGame` for each logged event, and to see what an event being considered would
+ * change.
+ */
+export function advance(view: PlayerView, knowledge: Knowledge, event: GameEvent): Knowledge {
+  const { level, moment, finessed, turn } = knowledge;
+  const table: Table = { level, moment, finessed, common: knowledge.common };
+  let { readings } = knowledge;
+  let common: (readonly Card[])[];
+  if (event.type === "clue") {
+    const { seat: giver, target, clue, touched } = event;
+    const reading = readClue(view, table, { giver, target, clue, touched });
+    readings = [...readings, { ...reading, turn }];
+    common = applyReading(view, table, reading);
+  } else {
+    common = table.common.with(event.cardId, [event.card]);
   }
-  return { ...table, readings };
+  const next = resolve(view, { ...table, moment: applyEvent(moment, event), common }, readings, {
+    turn,
+    event,
+  });
+  return { ...next.table, readings: next.readings, turn: turn + 1 };
 }
 
 /** Each card's clue possibilities at `moment`, shared between cards with no clues. */
@@ -373,9 +383,9 @@ function applyReading(view: PlayerView, table: Table, reading: ClueReading): (re
 function resolve(
   view: PlayerView,
   table: Table,
-  readings: PastReading[],
+  readings: readonly PastReading[],
   last: { turn: number; event: GameEvent },
-): { table: Table; readings: PastReading[] } {
+): { table: Table; readings: readonly PastReading[] } {
   for (;;) {
     const settled = { ...table, common: settle(view, table) };
     const ruled = ruleOut(settled, readings, last);
@@ -397,9 +407,9 @@ function resolve(
  */
 function ruleOut(
   table: Table,
-  readings: PastReading[],
+  readings: readonly PastReading[],
   last: { turn: number; event: GameEvent },
-): PastReading[] {
+): readonly PastReading[] {
   const possible = (reading: PastReading, interpretation: Interpretation) =>
     interpretation.ruledOutOn !== null ||
     (table.common[reading.focus]!.some((card) => sameCard(card, interpretation.focusIdentity)) &&
@@ -556,17 +566,18 @@ function settle(view: PlayerView, table: Table): (readonly Card[])[] {
 
 /**
  * What the viewer knows about each card, indexed by `CardId`: common knowledge, narrowed by the
- * cards the viewer can see. Visible cards are known exactly. Under Good Touch the viewer's clued
+ * cards the viewer can see. The viewer is a `Sight`, so a seat can also work out what a teammate
+ * would know. Visible cards are known exactly. Under Good Touch the viewer's clued
  * cards are also not any clued card they can see in another hand. Each pending clue keeps only the
  * interpretations that fit what the viewer knows, which can pin down the focus or a connecting card:
  * a player who sees the focus of a clue knows whether they were prompted or finessed.
  */
-export function privateKnowledge(view: PlayerView, knowledge: Knowledge): (readonly Card[])[] {
+export function privateKnowledge(view: Sight, knowledge: Knowledge): (readonly Card[])[] {
   const { moment, common, level, readings } = knowledge;
   const visibleClued = moment.hands
-    .flatMap((hand, seat) => (seat === view.seat ? [] : hand))
+    .flat()
     .filter((id) => isClued(moment, id))
-    .map((id) => view.cards[id]!.card!);
+    .flatMap((id) => view.cards[id]!.card ?? []);
   let known = possibilities(view, (id) => {
     const note = common[id]!;
     if (!isClued(moment, id) || !applies("good-touch", level)) return note;

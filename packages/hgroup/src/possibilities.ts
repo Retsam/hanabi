@@ -10,6 +10,12 @@ import {
   RANKS,
 } from "@hanabi/engine";
 
+/**
+ * What one seat can see: every card's clues, and its identity where the seat can see it. A
+ * `PlayerView` is one; a seat working out what a teammate sees can build another.
+ */
+export type Sight = Pick<PlayerView, "config" | "cards">;
+
 /** Every distinct card identity in the config, in suit then rank order. */
 export function identities(config: GameConfig): Card[] {
   return config.suits.flatMap((suit) => RANKS.map((rank) => ({ suit, rank })));
@@ -38,7 +44,7 @@ export function cluePossibilities(config: GameConfig, clues: ClueKnowledge): Car
 }
 
 /**
- * What the viewer can deduce each card to be, indexed by `CardId`. A visible card is exactly
+ * What the viewer (any `Sight`) can deduce each card to be, indexed by `CardId`. A visible card is exactly
  * itself. A hidden card (in the viewer's hand or the draw pile) is whatever its clues allow, minus
  * any identity whose every copy is already accounted for: visible somewhere, or deduced for
  * another of the viewer's cards. Deductions repeat until nothing changes, since pinning down one
@@ -48,7 +54,7 @@ export function cluePossibilities(config: GameConfig, clues: ClueKnowledge): Car
  * knowledge can be narrowed the same way. It must keep suit then rank order.
  */
 export function possibilities(
-  view: PlayerView,
+  view: Sight,
   start: (id: CardId) => readonly Card[] = cluesOf(view),
 ): (readonly Card[])[] {
   const { config } = view;
@@ -103,7 +109,7 @@ export function possibilities(
 }
 
 /** Each card's clue possibilities, shared between cards with the same clues. */
-function cluesOf(view: PlayerView): (id: CardId) => readonly Card[] {
+function cluesOf(view: Sight): (id: CardId) => readonly Card[] {
   const byClues = new Map<string, Card[]>();
   return (id) => {
     const { clues } = view.cards[id]!;

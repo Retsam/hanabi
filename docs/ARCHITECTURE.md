@@ -190,10 +190,11 @@ as much as for play: given a view, it judges every legal move rather than pickin
 - **Input:** a `PlayerView` (including its event log) and the table's convention level. The call is
   stateless: a pure function replays the log to rebuild convention state. Caching can come later if it
   is slow.
-- **Output:** every legal move, each with a category (`mandated`, `permitted` or `violates`), a score
+- **Output:** `rankMoves(view, level)` returns every legal move, each with a category (`mandated`, `permitted` or `violates`), a score
   and structured reasons. Moves rank by category first, then by score. The score is a heuristic that only
   orders moves within one decision; it is not comparable across turns.
-- **Reasons** name a convention id and the cards involved, for example a play clue on Bob's red 3 that
+- **Reasons** name a convention id (or none, for a rules-level reason such as a possible misplay) and
+  the cards involved, for example a play clue on Bob's red 3 that
   finesses Cathy's slot 1. `hgroup` also renders each reason as a default English sentence, for the CLI
   and the review output. The UI may render the structured form itself.
 - **Deterministic:** the same view and level always give the same ranked list, with ties broken in a

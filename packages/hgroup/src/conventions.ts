@@ -24,6 +24,9 @@ export const CONVENTION_LEVELS = {
   "finesse-position": 1,
   "finessed-cards-count-as-clued": 1,
   "prompts-before-finesses": 1,
+  "save-principle": 1,
+  "minimum-clue-value": 1,
+  "early-game": 1,
 } as const satisfies Record<string, Level>;
 
 export type ConventionId = keyof typeof CONVENTION_LEVELS;

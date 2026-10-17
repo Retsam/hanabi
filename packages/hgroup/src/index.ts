@@ -25,3 +25,4 @@ export {
   readGame,
   type Table,
 } from "./knowledge";
+export { type Category, rankMoves, type RankedMove, type Reason } from "./moves";

@@ -1,14 +1,11 @@
-# Level 1 conventions: clue reading
+# Level 1 conventions
 
 Specs for the level 1 conventions `@hanabi/hgroup` implements so far, by their ids in
 [H-GROUP-LEVELS.md](../H-GROUP-LEVELS.md). Each one names its source on
 [hanabi.github.io](https://hanabi.github.io/) (summarised here; the site's content is CC BY-SA 4.0), what
 it needs, how it reads a clue, what it rules out, and the calls we made where the site leaves room.
-The tests are in `packages/hgroup/src/knowledge.test.ts` and `connections.test.ts` (prompts and
-finesses), mostly built from the site's own examples.
-
-The principles that rank moves rather than read them (`save-principle`, `minimum-clue-value`,
-`early-game`, and Good Touch as a rule for the clue giver) arrive with the ranked output in step 4.
+The tests are in `packages/hgroup/src/knowledge.test.ts`, `connections.test.ts` (prompts and
+finesses) and `moves.test.ts` (move ranking), mostly built from the site's own examples.
 
 ## How a clue is read
 
@@ -174,3 +171,69 @@ If every interpretation is ruled out, a teammate broke a convention: the cards k
 the viewer can see are counted out, and under Good Touch the viewer's clued cards are not any clued card
 they can see in another hand. Each pending clue then keeps only the interpretations that fit, so Bob,
 seeing Cathy's red 4, knows his clued red card is the prompted red 3.
+
+## How moves are ranked
+
+`rankMoves(view, level)` reads the game once, then judges every legal move from what the viewer knows
+(their private knowledge). Each move gets a category (`mandated`, `permitted` or `violates`), a score
+that orders moves within a category, and reasons naming the conventions behind it. Moves rank by
+category, then score, then a fixed order: plays, discards, then clues by seat and clue.
+
+- **Plays:** a card the viewer knows is playable is permitted. It is mandated when a prompt or finesse
+  still possible from the viewer's side is waiting on it. Any other play violates the conventions,
+  since it may strike.
+- **Discards:** known trash is permitted, and scores above the chop. Discarding the chop is permitted,
+  except in the Early Game (below). Discarding a clued or finessed card, or an unclued card off chop,
+  violates the conventions. (Chop moves are level 4.)
+- **Clues:** the viewer reads the clue as the table would (`advance` on a clue event), then works out
+  what the receiver would keep. A clue is permitted when the real identity of its focus is among the
+  interpretations the receiver keeps and every connection is real: the prompted card is the leftmost
+  candidate, and the finesse position holds the card. Otherwise it is misread and violates the
+  conventions. A permitted clue can still fail one of the principles below.
+- **Scores:** a clue scores for each new card it gets, for a focus that is playable now and for each
+  connecting card. Among violations, the score puts the least harmful first: a clue that gets nothing,
+  then one that means nothing at the table's level, then discards and clues that lose or mislead about
+  cards, and a play that may strike last.
+- **Judgment call:** the receiver sees every card the viewer sees except their own hand. The viewer
+  can't see their own hand either, so those cards count as anything the viewer thinks they could be.
+  This is cautious: a clue that only works because the receiver sees one of the viewer's cards is
+  called misread.
+- **Judgment call:** a clue whose card may be a copy of one of the viewer's own clued cards scores
+  lower. The viewer can't tell, and Good Touch would make the receiver's card look like a different one.
+
+## `save-principle`
+
+- **Source:** [beginner/save-principle](https://hanabi.github.io/beginner/save-principle).
+- **Rule:** the team never lets a 5, a unique 2 (no other copy visible), a critical card or a unique
+  playable card be discarded. It overrides every other rule, Good Touch included.
+- **Ranking:** a clue that saves such a card from the next player's chop is mandated when they have
+  nothing better to do: no clued card the table knows is playable, and no known trash. A save that
+  breaks Good Touch is still permitted (or mandated), but scores lower for each trash card it touches.
+  The site's example has both blue and 3 breaking Good Touch to save the last blue 3, and blue scores
+  higher because one of the blue 4's it touches is useful.
+- **Judgment call:** only the next player's chop is urgent. A card on a later player's chop can be
+  saved by someone else before that player discards.
+
+## `minimum-clue-value`
+
+- **Source:** [beginner/minimum-clue-value-principle](https://hanabi.github.io/beginner/minimum-clue-value-principle).
+- **Rule:** every clue must get at least one previously unclued card played or saved. A clue that only
+  re-touches cards (a Tempo Clue) or only touches trash violates it.
+- **Ranking:** such a clue is still the least harmful violation, so it ranks first among them when a
+  player can't discard (clue tokens are full) and has nothing else to do.
+
+## `early-game`
+
+- **Source:** [level 1](https://hanabi.github.io/level-1#the-early-game).
+- **Rule:** before anyone has discarded, every available play and save clue is given before a player
+  discards their chop.
+- **Ranking:** discarding the chop violates it while any clue is permitted. Discarding known trash
+  does not end the Early Game, so it is not affected.
+- **Judgment call:** the Early Game ends at the first discard of any card, read from the log.
+
+## `2-save`: the Visible Rule
+
+- **Source:** [level 1](https://hanabi.github.io/level-1#the-visible-rule).
+- **Ranking:** a 2 Save on a 2 whose other copy is visible in another hand violates the conventions,
+  unless that copy is on its holder's chop too (Double Chop 2's). The reading is unchanged: the receiver
+  can't see their own 2, so they read the clue the same way.

@@ -108,7 +108,7 @@ export interface Knowledge extends Table {
 }
 
 /** A reading's interpretations that have not been ruled out. */
-const pending = (reading: ClueReading) =>
+export const pending = (reading: ClueReading) =>
   reading.interpretations.filter((interpretation) => interpretation.ruledOutOn === null);
 
 /**
@@ -133,7 +133,7 @@ export function chop(moment: Moment, seat: Seat): CardId | null {
 
 const key = (card: Card) => `${card.suit} ${card.rank}`;
 
-const isClued = (moment: Moment, id: CardId) => moment.clues[id]!.touchedBy.length > 0;
+export const isClued = (moment: Moment, id: CardId) => moment.clues[id]!.touchedBy.length > 0;
 
 /**
  * A seat's finesse position: their leftmost unclued card, with finessed cards counting as clued.
@@ -148,7 +148,8 @@ export function finessePosition(
 }
 
 /** Whether `card` is on its stack already. */
-const hasPlayed = (moment: Moment, card: Card) => (moment.stacks[card.suit] ?? 0) >= card.rank;
+export const hasPlayed = (moment: Moment, card: Card) =>
+  (moment.stacks[card.suit] ?? 0) >= card.rank;
 
 /**
  * Replays the view's log, reading every clue at the table's `level` to build common knowledge.
@@ -434,7 +435,7 @@ function ruleOut(
 }
 
 /** The cards in `connection`'s hand that could still be its card, leftmost first. */
-function connectingCards(
+export function connectingCards(
   table: Pick<Table, "moment" | "common">,
   connection: Connection,
 ): CardId[] {
@@ -618,10 +619,10 @@ export function privateKnowledge(view: Sight, knowledge: Knowledge): (readonly C
   }
 }
 
-type TableFacts = ReturnType<typeof tableFacts>;
+export type TableFacts = ReturnType<typeof tableFacts>;
 
 /** Facts about the table that every player agrees on. */
-function tableFacts(view: PlayerView, table: Table) {
+export function tableFacts(view: PlayerView, table: Table) {
   const { moment, common, finessed } = table;
   const { config } = view;
 

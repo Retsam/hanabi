@@ -60,6 +60,49 @@ describe("plays", () => {
     });
   });
 
+  // beginner/prompt, second example: with two red cards that could be the r3, Bob plays the leftmost.
+  it("are mandated for the leftmost card a prompt could be on", () => {
+    const prompt = deal({
+      hands: [
+        ["y3", "g3", "b3", "p3", "y4"],
+        ["g4", "b4", "p4", "r*3", "r*5"],
+        ["g5", "r4", "b5", "p5", "y5"],
+      ],
+      stacks: { red: 2, yellow: 2, green: 2, blue: 2, purple: 2 },
+    }).clue(CATHY, "red");
+    const [top] = ranked(prompt);
+    expect(top).toMatchObject({
+      action: { type: "play", cardId: prompt.cardAt(3, BOB) },
+      category: "mandated",
+    });
+    expect(judged(prompt, { type: "play", cardId: prompt.cardAt(4, BOB) }).category).toBe(
+      "violates",
+    );
+  });
+
+  // beginner/prompt, fourth example: Bob's three 3s play left to right until the r3 turns up.
+  it("move on to the next candidate when the leftmost was another card", () => {
+    const game = deal({
+      hands: [
+        ["y3", "g4", "b4", "p3", "y4"],
+        ["g5", "b3*", "g3*", "r3*", "p4"],
+        ["y5", "b5", "r4", "p5", "y4"],
+      ],
+      stacks: { red: 2, yellow: 1, green: 2, blue: 2, purple: 1 },
+      clueTokens: 6,
+    }).clue(CATHY, "red");
+    expect(ranked(game)[0]).toMatchObject({
+      action: { type: "play", cardId: game.cardAt(1, BOB) },
+      category: "mandated",
+    });
+    // Bob's b3 plays and he draws, so his g3 moves to slot 3.
+    const next = game.play(1).discard(4).discard(4);
+    expect(ranked(next)[0]).toMatchObject({
+      action: { type: "play", cardId: next.cardAt(2, BOB) },
+      category: "mandated",
+    });
+  });
+
   it("violate the conventions when the card is not known to be playable", () => {
     const move = judged(finesse, { type: "play", cardId: finesse.cardAt(1, BOB) });
     expect(move.category).toBe("violates");

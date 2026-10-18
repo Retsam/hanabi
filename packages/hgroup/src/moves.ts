@@ -145,22 +145,17 @@ function judgement(view: PlayerView, knowledge: Knowledge) {
             (connection) =>
               connection.seat === me &&
               !hasPlayed(moment, connection.card) &&
-              connectingCards(knowledge, connection)[0] === id,
+              connectingCards(knowledge, connection).find((each) =>
+                mine[each]!.some((card) => sameCard(card, connection.card)),
+              ) === id,
           ),
       ),
     );
 
   const play = (id: CardId): RankedMove => {
     const action = { type: "play", cardId: id } as const;
-    const note = mine[id]!;
-    if (note.length === 0 || !note.every(playableNow)) {
-      return {
-        action,
-        category: "violates",
-        score: -40 - note.filter((card) => !playableNow(card)).length,
-        reasons: [reason(null, [id], "The card is not known to be playable, so it may misplay.")],
-      };
-    }
+    // Checked first: a prompt with several candidates plays the leftmost before its note is pinned.
+    // The clue promises the card is there, and its giver answers for the cards played on the way.
     if (owed(id)) {
       const kind = isClued(moment, id) ? "prompt" : "finesse";
       return {
@@ -168,6 +163,15 @@ function judgement(view: PlayerView, knowledge: Knowledge) {
         category: "mandated",
         score: 100,
         reasons: [reason(kind, [id], `A ${kind} is waiting on this card: play it now.`)],
+      };
+    }
+    const note = mine[id]!;
+    if (note.length === 0 || !note.every(playableNow)) {
+      return {
+        action,
+        category: "violates",
+        score: -40 - note.filter((card) => !playableNow(card)).length,
+        reasons: [reason(null, [id], "The card is not known to be playable, so it may misplay.")],
       };
     }
     return {

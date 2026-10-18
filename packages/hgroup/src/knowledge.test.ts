@@ -266,6 +266,33 @@ describe("privateKnowledge", () => {
       "p2",
     ]);
   });
+
+  // beginner/save-principle: a save may break Good Touch.
+  it("leaves a save's giver's clued card open to being a copy of the saved card", () => {
+    // Alice's clued 2 could be the y2 she saves on Bob's chop.
+    const game = deal({
+      hands: [
+        ["r3", "r4", "p4", "p3", "y2*"],
+        ["b4", "g4", "p4", "r4", "y2"],
+      ],
+    }).clue(BOB, 2);
+    expect(own(game, ALICE, game.cardAt(4, ALICE))).toContain("y2");
+    // Once the table knows Bob's card is the y2, Alice's 2 still may be the other one.
+    const yellow = game.clue(ALICE, "red").clue(BOB, "yellow");
+    expect(common(yellow, ALICE, yellow.cardAt(4, BOB))).toEqual(["y2"]);
+    expect(common(yellow, ALICE, yellow.cardAt(4, ALICE))).toContain("y2");
+  });
+
+  it("still rules out copies of a play clue's card", () => {
+    const game = deal({
+      hands: [
+        ["r3", "r4", "p4", "p3", "y2*"],
+        ["b4", "g4", "p4", "r4", "y2"],
+      ],
+      stacks: { yellow: 1 },
+    }).clue(BOB, "yellow");
+    expect(own(game, ALICE, game.cardAt(4, ALICE))).not.toContain("y2");
+  });
 });
 
 describe("readGame over random games", { timeout: 60_000 }, () => {

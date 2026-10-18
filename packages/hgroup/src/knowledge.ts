@@ -123,6 +123,20 @@ export function focusCards(reading: ClueReading, kind?: Interpretation["kind"]):
 }
 
 /**
+ * Whether Good Touch can't rule out two clued cards being the same card. The Save Principle comes
+ * first, so a clue that may be a save can touch a copy of a clued card its giver couldn't see: one
+ * in their own hand. See `save-principle`.
+ */
+export function mayCopy(moment: Moment, readings: readonly ClueReading[]) {
+  const saves = readings.filter((reading) => focusCards(reading, "save").length > 0);
+  const saved = (focus: CardId, other: CardId) =>
+    saves.some(
+      (reading) => reading.focus === focus && moment.hands[reading.giver]!.includes(other),
+    );
+  return (a: CardId, b: CardId) => saved(a, b) || saved(b, a);
+}
+
+/**
  * A seat's chop: their oldest unclued card, which they discard next if they have nothing better to
  * do. Null if every card in their hand is clued.
  */
@@ -388,7 +402,7 @@ function resolve(
   last: { turn: number; event: GameEvent },
 ): { table: Table; readings: readonly PastReading[] } {
   for (;;) {
-    const settled = { ...table, common: settle(view, table) };
+    const settled = { ...table, common: settle(view, table, readings) };
     const ruled = ruleOut(settled, readings, last);
     const next = { ...settled, ...narrow(settled, ruled) };
     const same =
@@ -519,11 +533,17 @@ function finessedBy(table: Table, live: readonly Interpretation[]): CardId[] {
 /**
  * Narrows common knowledge with what follows from it, repeating until nothing changes: an identity
  * is ruled out once every copy is accounted for in public (played, discarded or known to be another
- * card in a hand), and under Good Touch no two clued cards are the same identity. A note is never
- * narrowed to nothing, so a misread clue leaves it as it was.
+ * card in a hand), and under Good Touch no two clued cards are the same identity, unless a save
+ * may have copied one (`mayCopy`). A note is never narrowed to nothing, so a misread clue leaves
+ * it as it was.
  */
-function settle(view: PlayerView, table: Table): (readonly Card[])[] {
+function settle(
+  view: PlayerView,
+  table: Table,
+  readings: readonly ClueReading[] = [],
+): (readonly Card[])[] {
   const { moment, level, config } = { ...table, config: view.config };
+  const copy = mayCopy(moment, readings);
   const common = [...table.common];
   const inHand = new Set(moment.hands.flat());
   // Discarded cards are public. (Played cards are filled in from their play events. A card in the
@@ -554,7 +574,9 @@ function settle(view: PlayerView, table: Table): (readonly Card[])[] {
         if (!isClued(moment, id) || !applies("good-touch", level)) return true;
         // Good Touch: a clued card will play one day, so it is no card that has already played.
         if (card.rank <= (moment.stacks[card.suit] ?? 0)) return false;
-        return !cluedKnown.some((other) => other !== id && sameCard(known(other)!, card));
+        return !cluedKnown.some(
+          (other) => other !== id && !copy(id, other) && sameCard(known(other)!, card),
+        );
       });
       if (note.length > 0 && note.length < common[id]!.length) {
         common[id] = note;
@@ -569,20 +591,27 @@ function settle(view: PlayerView, table: Table): (readonly Card[])[] {
  * What the viewer knows about each card, indexed by `CardId`: common knowledge, narrowed by the
  * cards the viewer can see. The viewer is a `Sight`, so a seat can also work out what a teammate
  * would know. Visible cards are known exactly. Under Good Touch the viewer's clued
- * cards are also not any clued card they can see in another hand. Each pending clue keeps only the
+ * cards are also not any clued card they can see in another hand, unless a save may have copied it
+ * (`mayCopy`). Each pending clue keeps only the
  * interpretations that fit what the viewer knows, which can pin down the focus or a connecting card:
  * a player who sees the focus of a clue knows whether they were prompted or finessed.
  */
 export function privateKnowledge(view: Sight, knowledge: Knowledge): (readonly Card[])[] {
   const { moment, common, level, readings } = knowledge;
+  const copy = mayCopy(moment, readings);
   const visibleClued = moment.hands
     .flat()
     .filter((id) => isClued(moment, id))
-    .flatMap((id) => view.cards[id]!.card ?? []);
+    .flatMap((id) => {
+      const card = view.cards[id]!.card;
+      return card ? [{ id, card }] : [];
+    });
   let known = possibilities(view, (id) => {
     const note = common[id]!;
     if (!isClued(moment, id) || !applies("good-touch", level)) return note;
-    const narrowed = note.filter((card) => !visibleClued.some((seen) => sameCard(seen, card)));
+    const narrowed = note.filter(
+      (card) => !visibleClued.some((seen) => !copy(id, seen.id) && sameCard(seen.card, card)),
+    );
     return narrowed.length > 0 ? narrowed : note;
   });
 

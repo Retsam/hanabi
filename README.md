@@ -16,4 +16,5 @@ pnpm install
 pnpm check        # typecheck, lint, format check, tests
 pnpm test:watch
 pnpm format       # format in place
+pnpm simulate     # H-Group self-play scores (--help for options)
 ```

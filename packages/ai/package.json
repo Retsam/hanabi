@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@hanabi/engine": "workspace:*",
-    "@hanabi/hgroup": "workspace:*"
+    "@hanabi/hgroup": "workspace:*",
+    "pure-rand": "^8.4.2"
   }
 }

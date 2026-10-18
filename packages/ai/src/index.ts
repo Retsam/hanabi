@@ -1,2 +1,11 @@
-// Seat interface, game runner and simulator. See docs/ARCHITECTURE.md.
-export const PACKAGE_NAME = "@hanabi/ai";
+// Seat controllers, the headless game runner and self-play. See docs/ARCHITECTURE.md ("Seats and AIs").
+export { type GameRun, runGame } from "./runner";
+export { hgroupSeat, type SeatController, syncSeat } from "./seat";
+export {
+  type GameResult,
+  type PlayerCount,
+  selfPlay,
+  type Summary,
+  summarize,
+  type Watcher,
+} from "./simulate";

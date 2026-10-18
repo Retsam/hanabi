@@ -123,7 +123,8 @@ If every interpretation is ruled out, a teammate broke a convention: the cards k
 - **Afterwards:** if the leftmost turns out to be another card, the next one is promised, and so on (the
   site's fourth example). The prompt is ruled out once none of them can be the card.
 - **Judgment call:** knowledge only pins a prompted card down when it is the only candidate. With several,
-  each keeps its possibilities: which one to play is a move-ranking question (step 4).
+  each keeps its possibilities. Move ranking makes playing the leftmost one mandated anyway (the site's
+  second and fourth examples): the prompt promises the card, and its giver answers for the cards before it.
 - **Judgment call:** a prompted player who passes their turn does not rule the prompt out. The site only
   calls finesses urgent.
 - **Limit:** one prompt or finesse per clue. Double prompts and a prompt plus a finesse are level 2.

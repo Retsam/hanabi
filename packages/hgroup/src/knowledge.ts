@@ -361,8 +361,7 @@ function applyReading(view: PlayerView, table: Table, reading: ClueReading): (re
   const { moment, level } = table;
   const common = [...table.common];
   const facts = tableFacts(view, table);
-  const meant = focusCards(reading);
-  const focusIs = meant.length === 1 ? meant[0] : undefined;
+  const means = focusCards(reading).length > 0;
 
   for (const id of moment.hands[reading.target]!) {
     const before = common[id]!;
@@ -375,15 +374,12 @@ function applyReading(view: PlayerView, table: Table, reading: ClueReading): (re
       common[id] = touched;
       continue;
     }
+    // The focus narrows to its interpretations, and no two clued cards are the same card, when the
+    // reading settles (`resolve`).
     let note = touched;
-    if (id === reading.focus && meant.length > 0) {
-      note = touched.filter((card) => meant.some((m) => sameCard(m, card)));
-    } else if (!isClued(moment, id) && meant.length > 0 && applies("good-touch", level)) {
-      // Good Touch: a newly touched card will play one day, so it is not trash, and it is not the
-      // same card as any other clued card, the focus included.
-      note = touched.filter(
-        (card) => !facts.isTrash(card, id) && !(focusIs !== undefined && sameCard(card, focusIs)),
-      );
+    if (id !== reading.focus && !isClued(moment, id) && means && applies("good-touch", level)) {
+      // Good Touch: a newly touched card will play one day, so it is not trash.
+      note = touched.filter((card) => !facts.isTrash(card, id));
     }
     common[id] = note.length > 0 ? note : touched;
   }

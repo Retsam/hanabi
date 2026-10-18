@@ -34,8 +34,6 @@ The decision engine replaces the simple rule-based AI once planned here. See
 4. The ranked-move output, the H-Group seat controller, the headless game runner and the simulator CLI.
 5. `reviewGame`, printable from the CLI.
 
-Step 4 may move ahead of step 3 to watch games sooner.
-
 **Done when:** every level 1 convention has scenario tests from its H-Group examples and passes them.
 The simulator can run self-play games and report scores, but nothing gates on them.
 

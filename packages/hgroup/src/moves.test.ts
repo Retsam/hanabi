@@ -199,8 +199,9 @@ describe("clues", () => {
     expect(conventions(move)).toContain("minimum-clue-value");
   });
 
-  it("score lower when the card they get may be a copy of one of the cluer's own clued cards", () => {
-    // Alice's clued 1 could be the y1 she is about to clue in Bob's hand.
+  // level-3#the-sarcastic-discard calls such a clue a mistake: it might break Good Touch.
+  it("are a last resort when the card they get may be a copy of the cluer's own clued card", () => {
+    // Alice's clued 1 could be the y1 she would clue in Bob's hand.
     const game = deal({
       hands: [
         ["r3", "g3", "b3", "p3", "r1*"],
@@ -213,8 +214,22 @@ describe("clues", () => {
       target: BOB,
       clue: { kind: "color", value: "yellow" },
     });
-    expect(yellow.category).toBe("permitted");
+    expect(yellow.category).toBe("violates");
     expect(conventions(yellow)).toContain("good-touch");
+  });
+
+  it("still save a card that may be a copy of the cluer's own clued card", () => {
+    // Alice's clued 2 could be the other y2, but the Save Principle comes first.
+    const game = deal({
+      hands: [
+        ["r3", "g3", "b3", "p3", "r2*"],
+        ["g4", "b4", "p4", "r4", "y2"],
+        ["g4", "b4", "y4", "r4", "p4"],
+      ],
+    });
+    const two = judged(game, { type: "clue", target: BOB, clue: { kind: "rank", value: 2 } });
+    expect(two.category).toBe("mandated");
+    expect(conventions(two)).toContain("good-touch");
   });
 
   // level-1#the-visible-rule

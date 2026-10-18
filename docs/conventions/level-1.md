@@ -198,8 +198,12 @@ category, then score, then a fixed order: plays, discards, then clues by seat an
   can't see their own hand either, so those cards count as anything the viewer thinks they could be.
   This is cautious: a clue that only works because the receiver sees one of the viewer's cards is
   called misread.
-- **Judgment call:** a clue whose card may be a copy of one of the viewer's own clued cards scores
-  lower. The viewer can't tell, and Good Touch would make the receiver's card look like a different one.
+- **Judgment call:** a play clue whose new card may be a copy of one of the viewer's own clued cards
+  violates Good Touch, so it's a last resort. The viewer can't tell, and Good Touch would make the
+  receiver read their card as something else. The site calls this a mistake in its
+  [Sarcastic Discard](https://hanabi.github.io/level-3#the-sarcastic-discard-sd) example, but the
+  recovery moves (Sarcastic Discards, Fix Clues) are level 3. A save of such a card still goes ahead,
+  at a lower score, since the Save Principle comes first.
 
 ## `save-principle`
 

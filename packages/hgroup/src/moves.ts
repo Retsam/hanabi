@@ -334,14 +334,16 @@ function judgement(view: PlayerView, knowledge: Knowledge) {
       ownClued.some((own) => mine[own]!.some((card) => sameCard(card, truth(id)!))),
     );
     if (risky.length > 0 && applies("good-touch", level)) {
-      score -= 5 * risky.length;
-      reasons.push(
-        reason(
-          "good-touch",
-          risky,
-          `${risky.map((id) => `The ${name(truth(id)!)}`).join(" and ")} may be a copy of one of your own clued cards.`,
-        ),
+      const copy = reason(
+        "good-touch",
+        risky,
+        `${risky.map((id) => `The ${name(truth(id)!)}`).join(" and ")} may be a copy of one of your own clued cards.`,
       );
+      // A play clue that may duplicate a clued card is a Good Touch mistake (the site's Sarcastic
+      // Discard example), so it's a last resort. A save still goes ahead: the Save Principle wins.
+      if (!saving) return verdict("violates", -4 - risky.length, [...reasons, copy]);
+      score -= 5 * risky.length;
+      reasons.push(copy);
     }
 
     if (bad.length > 0 && applies("good-touch", level)) {

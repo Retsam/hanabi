@@ -176,8 +176,18 @@ interface SeatController {
 ```
 
 A human seat is a promise the UI resolves. Async also leaves room for running AIs in a Web Worker. A
-helper wraps simple synchronous AIs. The only AI is the H-Group decision engine below: its seat
-controller plays the top-ranked move. There is no separate simple rule-based AI.
+helper (`syncSeat`) wraps simple synchronous AIs. The only AI is the H-Group decision engine below: its
+seat controller (`hgroupSeat(level)`) plays the top-ranked move. There is no separate simple rule-based AI.
+
+`runGame(state, seats)` in `@hanabi/ai` is the headless runner: it plays from any state (a fresh deal or
+a test scenario) to the end, asking the current seat for each move, rejecting illegal ones, and showing
+every seat its view of each event. It returns the final state and the actions, which with the config and
+deck make the game's replay.
+
+The simulator CLI (`pnpm simulate`) plays seeded self-play games with every seat on `hgroupSeat` and
+prints the mean score, perfect games, strikeouts and the worst seed per player count. `--verbose` prints
+every move with its category and reasons. Game i of a batch is dealt from seed + i, so a seed reproduces a
+game. It is for exploring how the engine plays; nothing gates on its numbers.
 
 ## Decision engine
 

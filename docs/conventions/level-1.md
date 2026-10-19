@@ -40,6 +40,7 @@ If every interpretation is ruled out, a teammate broke a convention: the cards k
 - **Source:** [beginner/chop](https://hanabi.github.io/beginner/chop),
   [level 1](https://hanabi.github.io/level-1#the-chop).
 - **Definition:** a seat's oldest (rightmost) unclued card. A hand with every card clued has no chop.
+  Finessed cards count as clued (`finessed-cards-count-as-clued`).
 - **Judgment call:** "discard known trash before chop" is about which card to discard, so it belongs to
   move ranking (step 4), not to the chop itself. The site says the same: trash does not become the chop.
 
@@ -218,10 +219,11 @@ category, then score, then a fixed order: plays, discards, then clues by seat an
   The site's example has both blue and 3 breaking Good Touch to save the last blue 3, and blue scores
   higher because one of the blue 4's it touches is useful.
 - **Reading:** because a save can break Good Touch, the focus of a clue that may be a save could be a
-  copy of a clued card in its giver's hand, which the giver couldn't see. Until the save reading is
-  ruled out, neither card rules the other's identity out. The giver of a 2 Save on a y2 keeps y2 as a
-  possibility for their own clued 2. Cards the giver could see are still ruled out: they would have made
-  the saved card not unique.
+  copy of a card that was already clued in its giver's hand, which the giver couldn't see. Until the
+  save reading is ruled out, neither card rules the other's identity out. The giver of a 2 Save on a y2
+  keeps y2 as a possibility for their own clued 2. Cards the giver could see are still ruled out: they
+  would have made the saved card not unique. So is a card in the giver's hand clued after the save,
+  since its cluer could see the saved card.
 - **Judgment call:** only the next player's chop is urgent. A card on a later player's chop can be
   saved by someone else before that player discards.
 

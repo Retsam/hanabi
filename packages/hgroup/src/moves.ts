@@ -16,6 +16,7 @@ import {
   chop,
   type ClueReading,
   connectingCards,
+  countsAsClued,
   hasPlayed,
   type Interpretation,
   isClued,
@@ -26,6 +27,7 @@ import {
   tableFacts,
 } from "./knowledge";
 import { clueMatches, sameCard } from "./possibilities";
+import { uniqBy } from "./util";
 
 /**
  * How a move stands under the conventions: one the player is obliged to make, one they may make,
@@ -122,9 +124,7 @@ function judgement(view: PlayerView, knowledge: Knowledge) {
   const stack = (card: Card) => moment.stacks[card.suit] ?? 0;
   const playableNow = (card: Card) => card.rank === stack(card) + 1;
 
-  const ownClued = moment.hands[me]!.filter(
-    (id) => isClued(moment, id) || knowledge.finessed.includes(id),
-  );
+  const ownClued = moment.hands[me]!.filter((id) => countsAsClued(knowledge, id));
   /** Clued cards in other hands, which the viewer sees: Good Touch says they will all play. */
   const visibleClued = moment.hands
     .flat()
@@ -193,7 +193,7 @@ function judgement(view: PlayerView, knowledge: Knowledge) {
         reasons: [reason("trash", [id], "The card is known trash.")],
       };
     }
-    if (isClued(moment, id) || knowledge.finessed.includes(id)) {
+    if (countsAsClued(knowledge, id)) {
       return {
         action,
         category: "violates",
@@ -201,7 +201,7 @@ function judgement(view: PlayerView, knowledge: Knowledge) {
         reasons: [reason("good-touch", [id], "Clued cards will play one day: don't discard them.")],
       };
     }
-    if (id !== chop(moment, me)) {
+    if (id !== chop(knowledge, me)) {
       return {
         action,
         category: "violates",
@@ -274,10 +274,11 @@ function judgement(view: PlayerView, knowledge: Knowledge) {
 
     const reasons: Reason[] = [];
     const saving = real.some((interpretation) => interpretation.kind === "save");
-    const conventions = real[0]!.conventions;
+    const primary = real.find((interpretation) => interpretation.kind === "save") ?? real[0]!;
+    const { conventions } = primary;
     reasons.push(
       reason(
-        conventions.at(-1) ?? null,
+        mainConvention(primary),
         [reading.focus],
         `Cluing ${said} is a ${saving ? "save" : "play"} clue on the ${name(focusCard)}.`,
       ),
@@ -291,12 +292,9 @@ function judgement(view: PlayerView, knowledge: Knowledge) {
           seat !== target &&
           hand.some((id) => truth(id) !== null && sameCard(truth(id)!, focusCard)),
       );
+      const twinChop = twin === -1 ? null : chop(knowledge, twin);
       const twinOnChop =
-        twin !== -1 &&
-        (() => {
-          const id = chop(moment, twin);
-          return id !== null && truth(id) !== null && sameCard(truth(id)!, focusCard);
-        })();
+        twinChop !== null && truth(twinChop) !== null && sameCard(truth(twinChop)!, focusCard);
       if (twin !== -1 && !twinOnChop) {
         return verdict("violates", -5, [
           ...reasons,
@@ -309,9 +307,7 @@ function judgement(view: PlayerView, knowledge: Knowledge) {
       }
     }
 
-    const newlyTouched = touched.filter(
-      (id) => !isClued(moment, id) && !knowledge.finessed.includes(id),
-    );
+    const newlyTouched = touched.filter((id) => !countsAsClued(knowledge, id));
     const bad = newlyTouched.filter((id, i) => {
       const card = truth(id)!;
       return (
@@ -393,11 +389,28 @@ function judgement(view: PlayerView, knowledge: Knowledge) {
 }
 
 const uniqueNames = (interpretations: readonly Interpretation[]) =>
-  [
-    ...new Set(
-      interpretations.map((interpretation) => `the ${name(interpretation.focusIdentity)}`),
-    ),
-  ].join(" or ");
+  uniqBy(
+    interpretations.map((interpretation) => interpretation.focusIdentity),
+    sameCard,
+  )
+    .map((card) => `the ${name(card)}`)
+    .join(" or ");
+
+const SAVES: readonly ConventionId[] = ["5-save", "2-save", "critical-save"];
+
+/**
+ * The convention a clue read as `interpretation` is an example of: its prompt or finesse, its kind
+ * of save, or a (delayed) play clue.
+ */
+function mainConvention(interpretation: Interpretation): ConventionId {
+  const [connection] = interpretation.connections;
+  if (connection !== undefined) return connection.kind;
+  const { conventions } = interpretation;
+  if (interpretation.kind === "save") {
+    return conventions.find((id) => SAVES.includes(id)) ?? "save-clue";
+  }
+  return conventions.includes("delayed-play-clue") ? "delayed-play-clue" : "play-clue";
+}
 
 /**
  * What the clue receiver would know after the clue: they see every card the viewer sees except
@@ -434,7 +447,7 @@ function urgentSave(
 ): boolean {
   const { level, moment } = knowledge;
   if (!applies("save-principle", level)) return false;
-  if (target !== (view.seat + 1) % view.config.numPlayers || id !== chop(moment, target)) {
+  if (target !== (view.seat + 1) % view.config.numPlayers || id !== chop(knowledge, target)) {
     return false;
   }
   const card = view.cards[id]!.card!;
@@ -461,9 +474,8 @@ function urgentSave(
   if (!protectedCard) return false;
   const busy = moment.hands[target]!.some((other) => {
     const note = knowledge.common[other]!;
-    const clued = isClued(moment, other) || knowledge.finessed.includes(other);
     return (
-      clued &&
+      countsAsClued(knowledge, other) &&
       (note.every((c) => c.rank === (moment.stacks[c.suit] ?? 0) + 1) ||
         note.every((c) => facts.isTrash(c, other)))
     );

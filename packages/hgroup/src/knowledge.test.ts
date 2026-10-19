@@ -9,6 +9,7 @@ import { forRandomGames } from "./testing/randomGames";
 
 const ALICE = 0;
 const BOB = 1;
+const CATHY = 2;
 
 describe("chop", () => {
   // beginner/chop: "Without Clues" and "With Clues".
@@ -19,9 +20,9 @@ describe("chop", () => {
         ["g5", "r2", "b4", "b3", "r3"],
       ],
     });
-    const { moment } = read(game, ALICE);
-    expect(chop(moment, ALICE)).toBe(game.cardAt(4, ALICE));
-    expect(chop(moment, BOB)).toBe(game.cardAt(4, BOB));
+    const knowledge = read(game, ALICE);
+    expect(chop(knowledge, ALICE)).toBe(game.cardAt(4, ALICE));
+    expect(chop(knowledge, BOB)).toBe(game.cardAt(4, BOB));
   });
 
   it("is the oldest unclued card, or nothing in a fully clued hand", () => {
@@ -31,12 +32,26 @@ describe("chop", () => {
         ["b4", "b3", "g*3", "g*4", "g*5"],
       ],
     });
-    const { moment } = read(game, ALICE);
-    expect(chop(moment, ALICE)).toBe(game.cardAt(3, ALICE));
-    expect(chop(moment, BOB)).toBe(game.cardAt(1, BOB));
+    const knowledge = read(game, ALICE);
+    expect(chop(knowledge, ALICE)).toBe(game.cardAt(3, ALICE));
+    expect(chop(knowledge, BOB)).toBe(game.cardAt(1, BOB));
 
     const locked = game.clue(BOB, "blue");
-    expect(chop(read(locked, ALICE).moment, BOB)).toBeNull();
+    expect(chop(read(locked, ALICE), BOB)).toBeNull();
+  });
+
+  it("skips a finessed card, which counts as clued", () => {
+    // Nothing has played, so Alice's 2 clue on Cathy's r2 finesses Bob's r1, his only unclued card.
+    const game = deal({
+      hands: [
+        ["y3", "g3", "b3", "p3", "y4"],
+        ["r1", "y2*", "g2*", "b2*", "p2*"],
+        ["g4", "r2", "b4", "p4", "y4"],
+      ],
+    }).clue(CATHY, 2);
+    const knowledge = read(game, ALICE);
+    expect(knowledge.finessed).toEqual([game.cardAt(0, BOB)]);
+    expect(chop(knowledge, BOB)).toBeNull();
   });
 });
 
@@ -281,6 +296,20 @@ describe("privateKnowledge", () => {
     const yellow = game.clue(ALICE, "red").clue(BOB, "yellow");
     expect(common(yellow, ALICE, yellow.cardAt(4, BOB))).toEqual(["y2"]);
     expect(common(yellow, ALICE, yellow.cardAt(4, ALICE))).toContain("y2");
+  });
+
+  it("rules out copies of a saved card for the giver's cards clued after the save", () => {
+    // Bob could see Alice's y2 when he clued it, so it is not the y2 Alice saved.
+    const game = deal({
+      hands: [
+        ["r3", "r4", "y2", "p3", "g4"],
+        ["b4", "g4", "p4", "r4", "y2"],
+      ],
+      stacks: { red: 1, yellow: 1, green: 1, blue: 1, purple: 1 },
+    })
+      .clue(BOB, 2)
+      .clue(ALICE, 2);
+    expect(own(game, ALICE, game.cardAt(2, ALICE))).not.toContain("y2");
   });
 
   it("still rules out copies of a play clue's card", () => {

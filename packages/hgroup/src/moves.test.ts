@@ -203,7 +203,7 @@ describe("clues", () => {
       clue: { kind: "color", value: "red" },
     });
     expect(move.category).toBe("permitted");
-    expect(conventions(move)).toEqual(["finesse-position"]);
+    expect(conventions(move)).toEqual(["finesse"]);
   });
 
   it("violate the conventions when they would be misread", () => {

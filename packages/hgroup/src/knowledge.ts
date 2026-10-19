@@ -77,6 +77,11 @@ export interface Interpretation {
 
 /** How the table reads a clue. */
 export interface ClueReading extends GivenClue {
+  /**
+   * The cards in the giver's hand that counted as clued when the clue was given. The giver couldn't
+   * see them, so a save may copy one (`mayCopy`).
+   */
+  readonly giverClued: readonly CardId[];
   /** The card the clue is about. See `clue-focus`. */
   readonly focus: CardId;
   /**
@@ -127,27 +132,32 @@ export function focusCards(reading: ClueReading, kind?: Interpretation["kind"]):
  * first, so a clue that may be a save can touch a copy of a clued card its giver couldn't see: one
  * in their own hand. See `save-principle`.
  */
-export function mayCopy(moment: Moment, readings: readonly ClueReading[]) {
+export function mayCopy(readings: readonly ClueReading[]) {
   const saves = readings.filter((reading) => focusCards(reading, "save").length > 0);
   const saved = (focus: CardId, other: CardId) =>
-    saves.some(
-      (reading) => reading.focus === focus && moment.hands[reading.giver]!.includes(other),
-    );
+    saves.some((reading) => reading.focus === focus && reading.giverClued.includes(other));
   return (a: CardId, b: CardId) => saved(a, b) || saved(b, a);
 }
 
 /**
  * A seat's chop: their oldest unclued card, which they discard next if they have nothing better to
- * do. Null if every card in their hand is clued.
+ * do. Finessed cards count as clued. Null if every card in their hand is clued.
  */
-export function chop(moment: Moment, seat: Seat): CardId | null {
-  const hand = moment.hands[seat]!;
-  return hand.findLast((id) => !isClued(moment, id)) ?? null;
+export function chop(table: Pick<Table, "moment" | "finessed">, seat: Seat): CardId | null {
+  const hand = table.moment.hands[seat]!;
+  return hand.findLast((id) => !countsAsClued(table, id)) ?? null;
 }
 
 const key = (card: Card) => `${card.suit} ${card.rank}`;
 
 export const isClued = (moment: Moment, id: CardId) => moment.clues[id]!.touchedBy.length > 0;
+
+/**
+ * Whether a card is clued or finessed: a finessed card will blind-play, so it counts as clued. See
+ * `finessed-cards-count-as-clued`.
+ */
+export const countsAsClued = (table: Pick<Table, "moment" | "finessed">, id: CardId) =>
+  isClued(table.moment, id) || table.finessed.includes(id);
 
 /**
  * A seat's finesse position: their leftmost unclued card, with finessed cards counting as clued.
@@ -157,8 +167,7 @@ export function finessePosition(
   table: Pick<Table, "moment" | "finessed">,
   seat: Seat,
 ): CardId | undefined {
-  const { moment, finessed } = table;
-  return moment.hands[seat]!.find((id) => !isClued(moment, id) && !finessed.includes(id));
+  return table.moment.hands[seat]!.find((id) => !countsAsClued(table, id));
 }
 
 /** Whether `card` is on its stack already. */
@@ -225,16 +234,17 @@ function startingNotes(view: PlayerView, moment: Moment): (readonly Card[])[] {
  * public information. A player narrows it further with the cards they see (`privateKnowledge`).
  */
 export function readClue(view: PlayerView, table: Table, given: GivenClue): ClueReading {
-  const { level, moment, common, finessed } = table;
+  const { level, moment, common } = table;
   const { target, clue, touched } = given;
   const facts = tableFacts(view, table);
 
-  const newlyTouched = touched.filter((id) => !isClued(moment, id) && !finessed.includes(id));
-  const chopId = chop(moment, target);
+  const newlyTouched = touched.filter((id) => !countsAsClued(table, id));
+  const chopId = chop(table, target);
   const onChop = chopId !== null && newlyTouched.includes(chopId);
   const focus = newlyTouched.length === 0 ? touched[0]! : onChop ? chopId : newlyTouched[0]!;
   const interpretations: Interpretation[] = [];
-  const offConvention = { ...given, focus, interpretations, conventions: [] };
+  const giverClued = moment.hands[given.giver]!.filter((id) => countsAsClued(table, id));
+  const offConvention = { ...given, giverClued, focus, interpretations, conventions: [] };
   if (!applies("clue-focus", level) || !applies("play-clue", level)) return offConvention;
 
   const candidates = common[focus]!.filter((card) => clueMatches(card, clue));
@@ -298,7 +308,7 @@ export function readClue(view: PlayerView, table: Table, given: GivenClue): Clue
   }
   const othersTouched = newlyTouched.some((id) => id !== focus);
   if (othersTouched && applies("good-touch", level)) conventions.push("good-touch");
-  return { ...given, focus, interpretations, conventions };
+  return { ...given, giverClued, focus, interpretations, conventions };
 }
 
 /**
@@ -539,7 +549,7 @@ function settle(
   readings: readonly ClueReading[] = [],
 ): (readonly Card[])[] {
   const { moment, level, config } = { ...table, config: view.config };
-  const copy = mayCopy(moment, readings);
+  const copy = mayCopy(readings);
   const common = [...table.common];
   const inHand = new Set(moment.hands.flat());
   // Discarded cards are public. (Played cards are filled in from their play events. A card in the
@@ -594,7 +604,7 @@ function settle(
  */
 export function privateKnowledge(view: Sight, knowledge: Knowledge): (readonly Card[])[] {
   const { moment, common, level, readings } = knowledge;
-  const copy = mayCopy(moment, readings);
+  const copy = mayCopy(readings);
   const visibleClued = moment.hands
     .flat()
     .filter((id) => isClued(moment, id))
@@ -648,13 +658,13 @@ export type TableFacts = ReturnType<typeof tableFacts>;
 
 /** Facts about the table that every player agrees on. */
 export function tableFacts(view: PlayerView, table: Table) {
-  const { moment, common, finessed } = table;
+  const { moment, common } = table;
   const { config } = view;
 
   /** Clued (or finessed) cards whose identity the whole table knows. */
   const gotten = moment.hands
     .flat()
-    .filter((id) => isClued(moment, id) || finessed.includes(id))
+    .filter((id) => countsAsClued(table, id))
     .flatMap((id) => (common[id]!.length === 1 ? [{ id, card: common[id]![0]! }] : []));
   const discarded = (card: Card) =>
     moment.discardPile.filter((id) => sameCard(view.cards[id]!.card!, card)).length;

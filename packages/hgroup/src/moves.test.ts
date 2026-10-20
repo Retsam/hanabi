@@ -103,6 +103,18 @@ describe("plays", () => {
     });
   });
 
+  it("aren't owed for a self-prompt while the clue may still be a direct play clue", () => {
+    // Alice's red clue on Bob's r4 could be a play clue on the r3, or on the r4 through his r3.
+    const game = deal({
+      hands: [
+        ["y3", "g3", "b3", "p3", "y4"],
+        ["r4", "g4", "b4", "r*3", "p4"],
+      ],
+      stacks: { red: 2, yellow: 2, green: 2, blue: 2, purple: 2 },
+    }).clue(BOB, "red");
+    expect(judged(game, { type: "play", cardId: game.cardAt(3, BOB) }).category).toBe("violates");
+  });
+
   it("violate the conventions when the card is not known to be playable", () => {
     const move = judged(finesse, { type: "play", cardId: finesse.cardAt(1, BOB) });
     expect(move.category).toBe("violates");

@@ -298,11 +298,13 @@ describe("privateKnowledge", () => {
     expect(common(yellow, ALICE, yellow.cardAt(4, ALICE))).toContain("y2");
   });
 
-  it("rules out copies of a saved card for the giver's cards clued after the save", () => {
-    // Bob could see Alice's y2 when he clued it, so it is not the y2 Alice saved.
+  it("still rules out a saved card's identity for the giver's cards clued after the save", () => {
+    // Alice 2 Saves Bob's y2, then Bob clues 2 on Alice's r2. Only cards already clued when Alice gave
+    // the save could be a copy she didn't see. Bob saw the saved y2 when he clued Alice's 2, so by
+    // Good Touch Alice knows her 2 is not a y2.
     const game = deal({
       hands: [
-        ["r3", "r4", "y2", "p3", "g4"],
+        ["r3", "r4", "r2", "p3", "g4"],
         ["b4", "g4", "p4", "r4", "y2"],
       ],
       stacks: { red: 1, yellow: 1, green: 1, blue: 1, purple: 1 },

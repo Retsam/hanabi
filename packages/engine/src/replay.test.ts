@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { Action } from "./actions";
-import { type Replay, replay } from "./replay";
-import { createGame } from "./state";
-import { deal, type Scenario } from "./testing/scenario";
+import type { Action } from "./actions.ts";
+import { type Replay, replay } from "./replay.ts";
+import { createGame } from "./state.ts";
+import { deal, type Scenario } from "./testing/scenario.ts";
 
 const ALICE = 0;
 const BOB = 1;

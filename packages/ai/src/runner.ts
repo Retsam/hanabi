@@ -7,7 +7,7 @@ import {
   playerView,
   validate,
 } from "@hanabi/engine";
-import type { SeatController } from "./seat";
+import type { SeatController } from "./seat.ts";
 
 export interface GameRun {
   /** The state once the game is over. Its `log` holds every event. */

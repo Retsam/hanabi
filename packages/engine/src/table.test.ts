@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { playerView } from "./playerView";
-import { history } from "./table";
-import { deal } from "./testing/scenario";
+import { playerView } from "./playerView.ts";
+import { history } from "./table.ts";
+import { deal } from "./testing/scenario.ts";
 
 const ALICE = 0;
 const BOB = 1;

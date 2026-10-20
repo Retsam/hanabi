@@ -1,8 +1,8 @@
 // Actions and the events `apply` returns. See docs/ARCHITECTURE.md ("Actions", "Events").
 import { castDraft, produce } from "immer";
-import { type Card, type CardId, RANKS, type Rank, type Suit } from "./card";
-import type { GameConfig } from "./config";
-import { finalRound, type GameState, type Seat } from "./state";
+import { type Card, type CardId, RANKS, type Rank, type Suit } from "./card.ts";
+import type { GameConfig } from "./config.ts";
+import { finalRound, type GameState, type Seat } from "./state.ts";
 
 export type Clue =
   | { readonly kind: "color"; readonly value: Suit }

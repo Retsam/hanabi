@@ -1,12 +1,12 @@
 // Invariants that must hold over random legal games. See docs/ARCHITECTURE.md ("Testing").
 import { assert, constantFrom, integer, property } from "fast-check";
 import { describe, expect, it } from "vitest";
-import { type Action, allClues, legalActions, validate } from "./actions";
-import { type CardId, RANKS } from "./card";
-import { playerView } from "./playerView";
-import { type GameState, maxScore, score } from "./state";
-import { history, publicTable } from "./table";
-import { type RandomGame, randomGame } from "./testing/randomGame";
+import { type Action, allClues, legalActions, validate } from "./actions.ts";
+import { type CardId, RANKS } from "./card.ts";
+import { playerView } from "./playerView.ts";
+import { type GameState, maxScore, score } from "./state.ts";
+import { history, publicTable } from "./table.ts";
+import { type RandomGame, randomGame } from "./testing/randomGame.ts";
 
 // Every property runs over the same games (a prefix of them for the slower properties), so each
 // game is only generated once. fast-check reports this seed with any failure.

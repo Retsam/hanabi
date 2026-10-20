@@ -2,8 +2,8 @@
 // `pnpm simulate --help`.
 import { parseArgs } from "node:util";
 import type { RankedMove } from "@hanabi/hgroup";
-import { describeEnd, describeEvent, describeMove, describeSummary } from "./report";
-import { type GameResult, type PlayerCount, selfPlay, summarize } from "./simulate";
+import { describeEnd, describeEvent, describeMove, describeSummary } from "./report.ts";
+import { type GameResult, type PlayerCount, selfPlay, summarize } from "./simulate.ts";
 
 const USAGE = `Usage: pnpm simulate [options]
 

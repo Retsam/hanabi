@@ -7,8 +7,8 @@ export {
   possibilities,
   sameCard,
   type Sight,
-} from "./possibilities";
-export { applies, CONVENTION_LEVELS, type ConventionId, type Level } from "./conventions";
+} from "./possibilities.ts";
+export { applies, CONVENTION_LEVELS, type ConventionId, type Level } from "./conventions.ts";
 export {
   advance,
   chop,
@@ -24,5 +24,5 @@ export {
   readClue,
   readGame,
   type Table,
-} from "./knowledge";
-export { type Category, rankMoves, type RankedMove, type Reason } from "./moves";
+} from "./knowledge.ts";
+export { type Category, rankMoves, type RankedMove, type Reason } from "./moves.ts";

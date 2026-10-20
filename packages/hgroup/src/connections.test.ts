@@ -2,8 +2,8 @@
 // examples. See docs/conventions/level-1.md.
 import { deal } from "@hanabi/engine/testing";
 import { describe, expect, it } from "vitest";
-import { finessePosition } from "./knowledge";
-import { common, lastReading, names, own, read } from "./testing/knowledge";
+import { finessePosition } from "./knowledge.ts";
+import { common, lastReading, names, own, read } from "./testing/knowledge.ts";
 
 const ALICE = 0;
 const BOB = 1;

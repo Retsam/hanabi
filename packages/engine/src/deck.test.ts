@@ -1,8 +1,8 @@
 import { xoroshiro128plus } from "pure-rand/generator/xoroshiro128plus";
 import { describe, expect, it } from "vitest";
-import { standardConfig } from "./config";
-import { orderedDeck, shuffledDeck } from "./deck";
-import type { Card } from "./card";
+import { standardConfig } from "./config.ts";
+import { orderedDeck, shuffledDeck } from "./deck.ts";
+import type { Card } from "./card.ts";
 
 const sortKey = (card: Card) => `${card.suit} ${card.rank}`;
 const sorted = (cards: readonly Card[]) => cards.map(sortKey).toSorted();

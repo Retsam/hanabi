@@ -12,7 +12,7 @@ import {
   RANKS,
   type Seat,
 } from "@hanabi/engine";
-import { applies, type ConventionId, type Level } from "./conventions";
+import { applies, type ConventionId, type Level } from "./conventions.ts";
 import {
   clueMatches,
   cluePossibilities,
@@ -21,8 +21,8 @@ import {
   possibilities,
   sameCard,
   type Sight,
-} from "./possibilities";
-import { uniqBy } from "./util";
+} from "./possibilities.ts";
+import { uniqBy } from "./util.ts";
 
 /** The table at one moment and what every player agreed each card could be by then. */
 export interface Table {

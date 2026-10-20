@@ -1,7 +1,7 @@
 // Shorthands for reading scenario games in hgroup's tests.
 import { type Card, type CardId, playerView, type Seat } from "@hanabi/engine";
 import type { Scenario } from "@hanabi/engine/testing";
-import { focusCards, privateKnowledge, readGame } from "../knowledge";
+import { focusCards, privateKnowledge, readGame } from "../knowledge.ts";
 
 /** Card names ("r4") for a list of identities, to keep expectations short. */
 export const names = (cards: readonly Card[]) => cards.map((card) => `${card.suit[0]}${card.rank}`);

@@ -1,4 +1,4 @@
-import type { Rank, Suit } from "./card";
+import type { Rank, Suit } from "./card.ts";
 
 /**
  * The rules of a game as data. Only the base game exists for now; variants will be added as config

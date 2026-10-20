@@ -3,9 +3,9 @@
 import { playerView } from "@hanabi/engine";
 import { deal } from "@hanabi/engine/testing";
 import { describe, expect, it } from "vitest";
-import { chop, privateKnowledge, readGame } from "./knowledge";
-import { common, lastReading, names, own, read } from "./testing/knowledge";
-import { forRandomGames } from "./testing/randomGames";
+import { chop, privateKnowledge, readGame } from "./knowledge.ts";
+import { common, lastReading, names, own, read } from "./testing/knowledge.ts";
+import { forRandomGames } from "./testing/randomGames.ts";
 
 const ALICE = 0;
 const BOB = 1;

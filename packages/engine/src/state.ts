@@ -1,9 +1,9 @@
 import { freeze } from "immer";
-import type { Clue, GameEvent } from "./actions";
-import { type Card, type CardId, RANKS, type Suit } from "./card";
-import type { GameConfig } from "./config";
-import { orderedDeck } from "./deck";
-import { type Moment, publicTable } from "./table";
+import type { Clue, GameEvent } from "./actions.ts";
+import { type Card, type CardId, RANKS, type Suit } from "./card.ts";
+import type { GameConfig } from "./config.ts";
+import { orderedDeck } from "./deck.ts";
+import { type Moment, publicTable } from "./table.ts";
 
 /** A player's position at the table, from 0 to `numPlayers - 1`. */
 export type Seat = number;

@@ -1,8 +1,8 @@
 import { type Action, type GameEvent, type PlayerView, playerView } from "@hanabi/engine";
 import { deal } from "@hanabi/engine/testing";
 import { describe, expect, it } from "vitest";
-import { runGame } from "./runner";
-import { hgroupSeat, type SeatController, syncSeat } from "./seat";
+import { runGame } from "./runner.ts";
+import { hgroupSeat, type SeatController, syncSeat } from "./seat.ts";
 
 const ALICE = 0;
 const BOB = 1;

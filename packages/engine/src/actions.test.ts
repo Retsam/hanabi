@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { type Action, apply, legalActions, validate } from "./actions";
-import { score } from "./state";
-import { deal } from "./testing/scenario";
+import { type Action, apply, legalActions, validate } from "./actions.ts";
+import { score } from "./state.ts";
+import { deal } from "./testing/scenario.ts";
 
 const ALICE = 0;
 const BOB = 1;

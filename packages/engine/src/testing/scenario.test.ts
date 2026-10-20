@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { playerView } from "../playerView";
-import { deal } from "./scenario";
+import { playerView } from "../playerView.ts";
+import { deal } from "./scenario.ts";
 
 const BOB = 1;
 

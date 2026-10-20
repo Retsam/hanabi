@@ -299,17 +299,19 @@ describe("privateKnowledge", () => {
   });
 
   it("still rules out a saved card's identity for the giver's cards clued after the save", () => {
-    // Alice 2 Saves Bob's y2, then Bob clues 2 on Alice's r2. Only cards already clued when Alice gave
-    // the save could be a copy she didn't see. Bob saw the saved y2 when he clued Alice's 2, so by
-    // Good Touch Alice knows her 2 is not a y2.
+    // Alice 2 Saves Bob's y2, then Cathy clues 2 on Alice's r2. Only cards already clued when Alice
+    // gave the save could be a copy she didn't see. Cathy could see the saved y2 when she clued
+    // Alice's 2, so by Good Touch Alice knows her 2 is not a y2.
     const game = deal({
       hands: [
         ["r3", "r4", "r2", "p3", "g4"],
         ["b4", "g4", "p4", "r4", "y2"],
+        ["b3", "g3", "p5", "b5", "y4"],
       ],
       stacks: { red: 1, yellow: 1, green: 1, blue: 1, purple: 1 },
     })
       .clue(BOB, 2)
+      .discard(3)
       .clue(ALICE, 2);
     expect(own(game, ALICE, game.cardAt(2, ALICE))).not.toContain("y2");
   });

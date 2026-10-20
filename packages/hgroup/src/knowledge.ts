@@ -77,9 +77,11 @@ export interface Interpretation {
 
 /** How the table reads a clue. */
 export interface ClueReading extends GivenClue {
+  /** The touched cards that didn't count as clued before the clue: the cards it gets. */
+  readonly newlyTouched: readonly CardId[];
   /**
    * The cards in the giver's hand that counted as clued when the clue was given. The giver couldn't
-   * see them, so a save may copy one (`mayCopy`).
+   * see them, so the clue may copy one (`mayCopy`).
    */
   readonly giverClued: readonly CardId[];
   /** The card the clue is about. See `clue-focus`. */
@@ -128,15 +130,17 @@ export function focusCards(reading: ClueReading, kind?: Interpretation["kind"]):
 }
 
 /**
- * Whether Good Touch can't rule out two clued cards being the same card. The Save Principle comes
- * first, so a clue that may be a save can touch a copy of a clued card its giver couldn't see: one
- * in their own hand. See `save-principle`.
+ * Whether Good Touch can't rule out two clued cards being the same card: a clue got one while the
+ * other was already clued in its giver's hand. The giver couldn't see their own card, so the clue
+ * may copy it. A save may do this under the Save Principle, and a play clue by mistake. See
+ * `good-touch`.
  */
 export function mayCopy(readings: readonly ClueReading[]) {
-  const saves = readings.filter((reading) => focusCards(reading, "save").length > 0);
-  const saved = (focus: CardId, other: CardId) =>
-    saves.some((reading) => reading.focus === focus && reading.giverClued.includes(other));
-  return (a: CardId, b: CardId) => saved(a, b) || saved(b, a);
+  const copied = (got: CardId, other: CardId) =>
+    readings.some(
+      (reading) => reading.newlyTouched.includes(got) && reading.giverClued.includes(other),
+    );
+  return (a: CardId, b: CardId) => copied(a, b) || copied(b, a);
 }
 
 /**
@@ -244,7 +248,14 @@ export function readClue(view: PlayerView, table: Table, given: GivenClue): Clue
   const focus = newlyTouched.length === 0 ? touched[0]! : onChop ? chopId : newlyTouched[0]!;
   const interpretations: Interpretation[] = [];
   const giverClued = moment.hands[given.giver]!.filter((id) => countsAsClued(table, id));
-  const offConvention = { ...given, giverClued, focus, interpretations, conventions: [] };
+  const offConvention = {
+    ...given,
+    newlyTouched,
+    giverClued,
+    focus,
+    interpretations,
+    conventions: [],
+  };
   if (!applies("clue-focus", level) || !applies("play-clue", level)) return offConvention;
 
   const candidates = common[focus]!.filter((card) => clueMatches(card, clue));
@@ -308,7 +319,7 @@ export function readClue(view: PlayerView, table: Table, given: GivenClue): Clue
   }
   const othersTouched = newlyTouched.some((id) => id !== focus);
   if (othersTouched && applies("good-touch", level)) conventions.push("good-touch");
-  return { ...given, giverClued, focus, interpretations, conventions };
+  return { ...given, newlyTouched, giverClued, focus, interpretations, conventions };
 }
 
 /**
@@ -539,8 +550,8 @@ function finessedBy(table: Table, live: readonly Interpretation[]): CardId[] {
 /**
  * Narrows common knowledge with what follows from it, repeating until nothing changes: an identity
  * is ruled out once every copy is accounted for in public (played, discarded or known to be another
- * card in a hand), and under Good Touch no two clued cards are the same identity, unless a save
- * may have copied one (`mayCopy`). A note is never narrowed to nothing, so a misread clue leaves
+ * card in a hand), and under Good Touch no two clued cards are the same identity, unless a clue
+ * may have copied one its giver couldn't see (`mayCopy`). A note is never narrowed to nothing, so a misread clue leaves
  * it as it was.
  */
 function settle(
@@ -597,7 +608,7 @@ function settle(
  * What the viewer knows about each card, indexed by `CardId`: common knowledge, narrowed by the
  * cards the viewer can see. The viewer is a `Sight`, so a seat can also work out what a teammate
  * would know. Visible cards are known exactly. Under Good Touch the viewer's clued
- * cards are also not any clued card they can see in another hand, unless a save may have copied it
+ * cards are also not any clued card they can see in another hand, unless a clue may have copied it
  * (`mayCopy`). Each pending clue keeps only the
  * interpretations that fit what the viewer knows, which can pin down the focus or a connecting card:
  * a player who sees the focus of a clue knows whether they were prompted or finessed.

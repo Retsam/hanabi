@@ -107,8 +107,15 @@ If every interpretation is ruled out, a teammate broke a convention: the cards k
 - **Reading:** every other newly touched card will play one day. It is no card that is trash (already
   played, unreachable, or already clued elsewhere), and not the focus's card if the focus is known.
 - **Afterwards:** a clued card is never a card that has since been played, and no two clued cards are
-  the same card. This is how the site's purple example pins down a purple 5. The exception is a clue
-  that may be a save (see `save-principle`).
+  the same card. This is how the site's purple example pins down a purple 5. The exception is a card a clue
+  got and a card already clued in that clue's giver's hand.
+- **Judgment call:** a clue's giver can't see their own clued cards, so the clue may copy one: a save is
+  allowed to (see `save-principle`), and a play clue might by mistake (the
+  [Sarcastic Discard](https://hanabi.github.io/level-3#the-sarcastic-discard-sd) example calls it one).
+  So the two cards never rule each other's identity out. The giver of a 2 Save on a y2 keeps y2 as a
+  possibility for their own clued 2. Clued cards the giver could see are still ruled out, and so is a
+  card in the giver's hand clued after the clue, by whoever could see both. This only gives up
+  narrowing: the giver may know privately that their card isn't the copy, but the table can't tell.
 - **Rules out:** for a clue that is off-convention, nothing: Good Touch only applies to a clue that means
   something.
 - **Judgment call:** knowledge is never narrowed to nothing. If a later fact contradicts an earlier
@@ -218,12 +225,7 @@ category, then score, then a fixed order: plays, discards, then clues by seat an
   breaks Good Touch is still permitted (or mandated), but scores lower for each trash card it touches.
   The site's example has both blue and 3 breaking Good Touch to save the last blue 3, and blue scores
   higher because one of the blue 4's it touches is useful.
-- **Reading:** because a save can break Good Touch, the focus of a clue that may be a save could be a
-  copy of a card that was already clued in its giver's hand, which the giver couldn't see. Until the
-  save reading is ruled out, neither card rules the other's identity out. The giver of a 2 Save on a y2
-  keeps y2 as a possibility for their own clued 2. Cards the giver could see are still ruled out: they
-  would have made the saved card not unique. So is a card in the giver's hand clued after the save,
-  since its cluer could see the saved card.
+- **Reading:** a save may copy a clued card its giver couldn't see (see `good-touch`).
 - **Judgment call:** only the next player's chop is urgent. A card on a later player's chop can be
   saved by someone else before that player discards.
 

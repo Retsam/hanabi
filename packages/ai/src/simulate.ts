@@ -13,8 +13,8 @@ import {
 } from "@hanabi/engine";
 import type { Level, RankedMove } from "@hanabi/hgroup";
 import { xoroshiro128plus } from "pure-rand/generator/xoroshiro128plus";
-import { runGame } from "./runner";
-import { hgroupSeat } from "./seat";
+import { runGame } from "./runner.ts";
+import { hgroupSeat } from "./seat.ts";
 
 export type PlayerCount = 2 | 3 | 4 | 5;
 

@@ -8,5 +8,5 @@ export {
   parseHandCard,
   Scenario,
   type ScenarioSetup,
-} from "./scenario";
-export { type RandomGame, randomGame } from "./randomGame";
+} from "./scenario.ts";
+export { type RandomGame, randomGame } from "./randomGame.ts";

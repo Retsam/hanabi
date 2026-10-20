@@ -3,8 +3,8 @@
 import { type Action, legalActions, playerView, type Seat } from "@hanabi/engine";
 import { deal, type Scenario } from "@hanabi/engine/testing";
 import { describe, expect, it } from "vitest";
-import { rankMoves } from "./moves";
-import { forRandomGames } from "./testing/randomGames";
+import { rankMoves } from "./moves.ts";
+import { forRandomGames } from "./testing/randomGames.ts";
 
 const ALICE = 0;
 const BOB = 1;

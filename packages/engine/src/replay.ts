@@ -1,8 +1,8 @@
 // Replays: a game recorded as its config, dealt deck and action list. See docs/ARCHITECTURE.md ("Replays").
-import { type Action, apply, type GameEvent } from "./actions";
-import type { Card } from "./card";
-import type { GameConfig } from "./config";
-import { createGame, type GameState } from "./state";
+import { type Action, apply, type GameEvent } from "./actions.ts";
+import type { Card } from "./card.ts";
+import type { GameConfig } from "./config.ts";
+import { createGame, type GameState } from "./state.ts";
 
 /**
  * A complete record of a game. The deck is stored rather than a seed, so replays survive changes to

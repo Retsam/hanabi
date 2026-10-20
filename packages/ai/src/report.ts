@@ -1,7 +1,7 @@
 // Plain-text rendering of games and results for the simulator CLI.
 import type { Card, GameEvent, GameState, Seat } from "@hanabi/engine";
 import type { RankedMove } from "@hanabi/hgroup";
-import type { PlayerCount, Summary } from "./simulate";
+import type { PlayerCount, Summary } from "./simulate.ts";
 
 const NAMES = ["Alice", "Bob", "Cathy", "Donald", "Emily"];
 

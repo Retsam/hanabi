@@ -1,11 +1,11 @@
 // Random legal games for property tests.
 import { uniformInt } from "pure-rand/distribution/uniformInt";
 import { xoroshiro128plus } from "pure-rand/generator/xoroshiro128plus";
-import { type Action, apply, legalActions } from "../actions";
-import { standardConfig } from "../config";
-import { shuffledDeck } from "../deck";
-import type { Replay, ReplayResult } from "../replay";
-import { createGame } from "../state";
+import { type Action, apply, legalActions } from "../actions.ts";
+import { standardConfig } from "../config.ts";
+import { shuffledDeck } from "../deck.ts";
+import type { Replay, ReplayResult } from "../replay.ts";
+import { createGame } from "../state.ts";
 
 /** A random game's record, plus every state and event it went through. */
 export type RandomGame = Replay & ReplayResult;

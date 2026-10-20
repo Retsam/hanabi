@@ -1,7 +1,7 @@
 import { standardConfig } from "@hanabi/engine";
 import { deal } from "@hanabi/engine/testing";
 import { describe, expect, it } from "vitest";
-import { type GameResult, summarize } from "./simulate";
+import { type GameResult, summarize } from "./simulate.ts";
 
 const { state } = deal({
   hands: [

@@ -1,9 +1,9 @@
 // The public table and how each event changes it, so a game's past can be rebuilt from its log. See
 // docs/ARCHITECTURE.md ("Events").
 import { castDraft, produce } from "immer";
-import type { GameEvent } from "./actions";
-import type { CardId, Suit } from "./card";
-import type { ClueKnowledge, GameState } from "./state";
+import type { GameEvent } from "./actions.ts";
+import type { CardId, Suit } from "./card.ts";
+import type { ClueKnowledge, GameState } from "./state.ts";
 
 /** The public parts of the table at one moment: what every player could see of it. */
 export interface Moment {

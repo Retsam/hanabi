@@ -10,7 +10,7 @@ import {
   RANKS,
   type Seat,
 } from "@hanabi/engine";
-import { applies, type ConventionId, type Level } from "./conventions";
+import { applies, type ConventionId, type Level } from "./conventions.ts";
 import {
   advance,
   chop,
@@ -25,9 +25,9 @@ import {
   privateKnowledge,
   readGame,
   tableFacts,
-} from "./knowledge";
-import { clueMatches, sameCard } from "./possibilities";
-import { uniqBy } from "./util";
+} from "./knowledge.ts";
+import { clueMatches, sameCard } from "./possibilities.ts";
+import { uniqBy } from "./util.ts";
 
 /**
  * How a move stands under the conventions: one the player is obliged to make, one they may make,

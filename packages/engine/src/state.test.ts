@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { standardConfig } from "./config";
-import { createGame, maxScore } from "./state";
-import { orderedDeck } from "./deck";
+import { standardConfig } from "./config.ts";
+import { createGame, maxScore } from "./state.ts";
+import { orderedDeck } from "./deck.ts";
 
 const ALICE = 0;
 

@@ -1,8 +1,8 @@
 import { type Card, playerView, standardConfig } from "@hanabi/engine";
 import { deal } from "@hanabi/engine/testing";
 import { describe, expect, it } from "vitest";
-import { cluePossibilities, identities, possibilities } from "./possibilities";
-import { forRandomGames } from "./testing/randomGames";
+import { cluePossibilities, identities, possibilities } from "./possibilities.ts";
+import { forRandomGames } from "./testing/randomGames.ts";
 
 const ALICE = 0;
 const BOB = 1;

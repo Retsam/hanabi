@@ -43,7 +43,8 @@ docs/
 
 Packages are private and consumed as TypeScript source: each package's `exports` points at
 `src/index.ts` and TypeScript uses `"moduleResolution": "bundler"`. There is no build step until the UI
-needs one.
+needs one. Relative imports name the `.ts` file and code sticks to erasable syntax
+(`erasableSyntaxOnly`), so Node runs the source directly, as the simulator CLI does.
 
 Dependency direction is one-way: `engine` ← `hgroup` ← `ai` ← `apps/web`.
 

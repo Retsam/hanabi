@@ -1,11 +1,11 @@
 // A stacked-deck scenario builder for tests: deal exact hands, then step through actions by slot.
 import { freeze, produce } from "immer";
-import { type Action, apply, type Clue, type GameEvent } from "../actions";
-import { type Card, type CardId, RANKS, type Rank, type Suit } from "../card";
-import { type GameConfig, standardConfig } from "../config";
-import { orderedDeck } from "../deck";
-import { createGame, finalRound, type GameState, type Seat } from "../state";
-import { publicTable } from "../table";
+import { type Action, apply, type Clue, type GameEvent } from "../actions.ts";
+import { type Card, type CardId, RANKS, type Rank, type Suit } from "../card.ts";
+import { type GameConfig, standardConfig } from "../config.ts";
+import { orderedDeck } from "../deck.ts";
+import { createGame, finalRound, type GameState, type Seat } from "../state.ts";
+import { publicTable } from "../table.ts";
 
 /** Short card notation, like "r1" for a red 1: the suit's first letter, then the rank. */
 export type CardName = string;
@@ -119,11 +119,14 @@ export function deal(setup: ScenarioSetup): Scenario {
 
 /** An immutable game in progress. Each action returns a new Scenario. */
 export class Scenario {
-  constructor(
-    readonly state: GameState,
-    /** Every action applied so far, oldest first. */
-    readonly actions: readonly Action[],
-  ) {}
+  readonly state: GameState;
+  /** Every action applied so far, oldest first. */
+  readonly actions: readonly Action[];
+
+  constructor(state: GameState, actions: readonly Action[]) {
+    this.state = state;
+    this.actions = actions;
+  }
 
   /** The event each action produced: the state's log. */
   get events(): readonly GameEvent[] {

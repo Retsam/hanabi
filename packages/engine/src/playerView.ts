@@ -1,6 +1,6 @@
 // The projection of game state one seat is allowed to see. See docs/ARCHITECTURE.md ("Hidden information").
-import type { Card, CardId } from "./card";
-import type { ClueKnowledge, GameState, Seat } from "./state";
+import type { Card, CardId } from "./card.ts";
+import type { ClueKnowledge, GameState, Seat } from "./state.ts";
 
 /** A card as one seat sees it: `card` is null when its identity is hidden from that seat. */
 export interface CardView {

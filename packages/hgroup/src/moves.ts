@@ -137,10 +137,15 @@ function judgement(view: PlayerView, knowledge: Knowledge) {
 
   /** Whether some clue's still-possible reading needs `id` to play now as a prompt or finesse. */
   const owed = (id: CardId) =>
-    knowledge.readings.some((reading) =>
-      pending(reading).some(
-        (interpretation) =>
-          mine[reading.focus]!.some((card) => sameCard(card, interpretation.focusIdentity)) &&
+    knowledge.readings.some((reading) => {
+      // Only where every reading the viewer can't rule out needs the card: a self-prompt that may
+      // be a direct play clue owes nothing yet.
+      const live = pending(reading).filter((interpretation) =>
+        mine[reading.focus]!.some((card) => sameCard(card, interpretation.focusIdentity)),
+      );
+      return (
+        live.length > 0 &&
+        live.every((interpretation) =>
           interpretation.connections.some(
             (connection) =>
               connection.seat === me &&
@@ -149,8 +154,9 @@ function judgement(view: PlayerView, knowledge: Knowledge) {
                 mine[each]!.some((card) => sameCard(card, connection.card)),
               ) === id,
           ),
-      ),
-    );
+        )
+      );
+    });
 
   const play = (id: CardId): RankedMove => {
     const action = { type: "play", cardId: id } as const;

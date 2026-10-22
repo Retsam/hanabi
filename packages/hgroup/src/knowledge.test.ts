@@ -282,8 +282,7 @@ describe("privateKnowledge", () => {
     ]);
   });
 
-  // A clue's giver can't see their own clued cards, so the clue may copy one: a save under the Save
-  // Principle (beginner/save-principle), a play clue by mistake (level-3#the-sarcastic-discard).
+  // beginner/save-principle: a save may break Good Touch.
   it("leaves a save's giver's clued card open to being a copy of the saved card", () => {
     // Alice's clued 2 could be the y2 she saves on Bob's chop.
     const game = deal({
@@ -299,35 +298,10 @@ describe("privateKnowledge", () => {
     expect(common(yellow, ALICE, yellow.cardAt(4, ALICE))).toContain("y2");
   });
 
-  it("leaves a play clue's giver's clued card open to being a copy of the card it gets", () => {
-    const game = deal({
-      hands: [
-        ["r3", "r4", "p4", "p3", "y2*"],
-        ["b4", "g4", "p4", "r4", "y2"],
-      ],
-      stacks: { yellow: 1 },
-    }).clue(BOB, "yellow");
-    expect(own(game, ALICE, game.cardAt(4, ALICE))).toContain("y2");
-  });
-
-  it("leaves a card open to being a copy of a clued card its cluer holds", () => {
-    // Alice 2 Saves Bob's y2, then Bob clues 2 on Alice's y2. Bob can't see his own 2, so Alice's 2
-    // may still be the y2.
-    const game = deal({
-      hands: [
-        ["r3", "r4", "y2", "p3", "g4"],
-        ["b4", "g4", "p4", "r4", "y2"],
-      ],
-      stacks: { red: 1, yellow: 1, green: 1, blue: 1, purple: 1 },
-    })
-      .clue(BOB, 2)
-      .clue(ALICE, 2);
-    expect(own(game, ALICE, game.cardAt(2, ALICE))).toContain("y2");
-  });
-
-  it("still rules out copies of clued cards a clue's giver could see", () => {
-    // Alice 2 Saves Bob's y2, then Cathy clues 2 on Alice's r2. Cathy could see the saved y2, and
-    // Alice's 2 wasn't clued when Alice gave the save, so by Good Touch Alice's 2 is not a y2.
+  it("still rules out a saved card's identity for the giver's cards clued after the save", () => {
+    // Alice 2 Saves Bob's y2, then Cathy clues 2 on Alice's r2. Only cards already clued when Alice
+    // gave the save could be a copy she didn't see. Cathy could see the saved y2 when she clued
+    // Alice's 2, so by Good Touch Alice knows her 2 is not a y2.
     const game = deal({
       hands: [
         ["r3", "r4", "r2", "p3", "g4"],
@@ -340,6 +314,17 @@ describe("privateKnowledge", () => {
       .discard(3)
       .clue(ALICE, 2);
     expect(own(game, ALICE, game.cardAt(2, ALICE))).not.toContain("y2");
+  });
+
+  it("still rules out copies of a play clue's card", () => {
+    const game = deal({
+      hands: [
+        ["r3", "r4", "p4", "p3", "y2*"],
+        ["b4", "g4", "p4", "r4", "y2"],
+      ],
+      stacks: { yellow: 1 },
+    }).clue(BOB, "yellow");
+    expect(own(game, ALICE, game.cardAt(4, ALICE))).not.toContain("y2");
   });
 });
 

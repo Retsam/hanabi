@@ -5,7 +5,6 @@ import {
   type Card,
   type CardId,
   type Clue,
-  type GameEvent,
   type PlayerView,
   RANKS,
   type Seat,
@@ -17,6 +16,7 @@ import {
   type ClueReading,
   connectingCards,
   countsAsClued,
+  type GivenClue,
   hasPlayed,
   type Interpretation,
   isClued,
@@ -26,6 +26,7 @@ import {
   privateKnowledge,
   readGame,
   tableFacts,
+  type TableFacts,
 } from "./knowledge.ts";
 import { clueMatches, sameCard } from "./possibilities.ts";
 import { couldBe, identity, narrowed, type Note } from "./notes.ts";
@@ -72,14 +73,15 @@ const ORDER: Record<Category, number> = { mandated: 0, permitted: 1, violates: 2
  */
 export function rankMoves(view: PlayerView, level: Level): RankedMove[] {
   if (view.status === "over") return [];
-  const knowledge = readGame(view, level);
-  const judge = judgement(view, knowledge);
-  const clues = view.clueTokens > 0 ? cluesFor(view).map(judge.clue) : [];
+  const judge = judgeFor(view, readGame(view, level));
+  const clues = view.clueTokens > 0 ? cluesFor(view).map((given) => judgeClue(judge, given)) : [];
   const anyClue = clues.some((move) => move.category !== "violates");
   const hand = view.hands[view.seat]!;
-  const plays = hand.map(judge.play);
+  const plays = hand.map((id) => judgePlay(judge, id));
   const discards =
-    view.clueTokens < view.config.maxClueTokens ? hand.map((id) => judge.discard(id, anyClue)) : [];
+    view.clueTokens < view.config.maxClueTokens
+      ? hand.map((id) => judgeDiscard(judge, id, anyClue))
+      : [];
   return [...plays, ...discards, ...clues]
     .map((move, i) => ({ move, i }))
     .toSorted((a, b) => {
@@ -90,7 +92,7 @@ export function rankMoves(view: PlayerView, level: Level): RankedMove[] {
 }
 
 /** Every clue the viewer could give, with the cards it would touch: each seat, each color, each rank. */
-function cluesFor(view: PlayerView): { target: Seat; clue: Clue; touched: CardId[] }[] {
+function cluesFor(view: PlayerView): Given[] {
   const clues: Clue[] = [
     ...view.config.suits.map((value) => ({ kind: "color", value }) as const),
     ...RANKS.map((value) => ({ kind: "rank", value }) as const),
@@ -105,7 +107,14 @@ function cluesFor(view: PlayerView): { target: Seat; clue: Clue; touched: CardId
   return result;
 }
 
-const reason = (convention: ConventionId | null, cards: CardId[], text: string): Reason => ({
+/** A clue the viewer could give: to whom, and the cards it would touch. */
+type Given = Omit<GivenClue, "giver">;
+
+const reason = (
+  convention: ConventionId | null,
+  cards: readonly CardId[],
+  text: string,
+): Reason => ({
   convention,
   cards,
   text,
@@ -114,282 +123,332 @@ const reason = (convention: ConventionId | null, cards: CardId[], text: string):
 const name = (card: Card) => `${card.suit} ${card.rank}`;
 const clueName = (clue: Clue) => (clue.kind === "rank" ? `number ${clue.value}` : clue.value);
 
-/** The judges for each kind of move, sharing what the viewer knows. */
-function judgement(view: PlayerView, knowledge: Knowledge) {
-  const { level, moment } = knowledge;
-  const me = view.seat;
-  const facts = tableFacts(view, knowledge);
-  const mine = privateKnowledge(view, knowledge);
-  const truth = (id: CardId) => view.cards[id]!.card;
-  const playableNow = (card: Card) => isPlayable(moment, card);
+/** What the viewer knows on this turn, shared by every judgement. */
+interface Judge {
+  readonly view: PlayerView;
+  readonly knowledge: Knowledge;
+  readonly facts: TableFacts;
+  /** What the viewer knows about each card (`privateKnowledge`). */
+  readonly mine: readonly Note[];
+  /** Whether a convention is in force at the table's level. */
+  readonly uses: (convention: ConventionId) => boolean;
+  /** A card's identity, or null if the viewer can't see it. */
+  readonly seen: (id: CardId) => Card | null;
+  /** Trash to the table, or a copy of a clued card the viewer sees, which Good Touch says will play. */
+  readonly isTrash: (card: Card, self: CardId) => boolean;
+}
 
-  const ownClued = moment.hands[me]!.filter((id) => countsAsClued(knowledge, id));
-  /** Clued cards in other hands, which the viewer sees: Good Touch says they will all play. */
+function judgeFor(view: PlayerView, knowledge: Knowledge): Judge {
+  const { moment, level } = knowledge;
+  const facts = tableFacts(view, knowledge);
+  const uses = (convention: ConventionId) => applies(convention, level);
+  const seen = (id: CardId) => view.cards[id]!.card;
   const visibleClued = moment.hands
     .flat()
-    .filter((id) => isClued(moment, id) && truth(id) !== null)
-    .map((id) => ({ id, card: truth(id)! }));
+    .filter((id) => isClued(moment, id) && seen(id) !== null)
+    .map((id) => ({ id, card: seen(id)! }));
   const isTrash = (card: Card, self: CardId) =>
     facts.isTrash(card, self) ||
-    (applies("good-touch", level) &&
+    (uses("good-touch") &&
       visibleClued.some((other) => other.id !== self && sameCard(other.card, card)));
+  const mine = privateKnowledge(view, knowledge);
+  return { view, knowledge, facts, mine, uses, seen, isTrash };
+}
 
-  /** Whether some clue's still-possible reading needs `id` to play now as a prompt or finesse. */
-  const owed = (id: CardId) =>
-    knowledge.readings.some((reading) => {
-      // Only where every reading the viewer can't rule out needs the card: a self-prompt that may
-      // be a direct play clue owes nothing yet.
-      const live = pending(reading).filter((interpretation) =>
-        couldBe(mine[reading.focus]!, interpretation.focusIdentity),
-      );
-      return (
-        live.length > 0 &&
-        live.every((interpretation) =>
-          interpretation.connections.some(
-            (connection) =>
-              connection.seat === me &&
-              // A prompt can wait on a clued card the table knows will play first.
-              playableNow(connection.card) &&
-              connectingCards(knowledge, connection).find((each) =>
-                couldBe(mine[each]!, connection.card),
-              ) === id,
-          ),
-        )
-      );
-    });
+const move = (
+  action: Action,
+  category: Category,
+  score: number,
+  reasons: Reason[],
+  reading?: ClueReading,
+): RankedMove => ({ action, category, score, reasons, ...(reading && { reading }) });
 
-  const play = (id: CardId): RankedMove => {
-    const action = { type: "play", cardId: id } as const;
-    // Checked first: a prompt with several candidates plays the leftmost before its note is pinned.
-    // The clue promises the card is there, and its giver answers for the cards played on the way.
-    if (owed(id)) {
-      const kind = isClued(moment, id) ? "prompt" : "finesse";
-      return {
-        action,
-        category: "mandated",
-        score: 100,
-        reasons: [reason(kind, [id], `A ${kind} is waiting on this card: play it now.`)],
-      };
-    }
-    const note = mine[id]!;
-    if (note.length === 0 || !note.every(playableNow)) {
-      return {
-        action,
-        category: "violates",
-        score: -40 - note.filter((card) => !playableNow(card)).length,
-        reasons: [reason(null, [id], "The card is not known to be playable, so it may misplay.")],
-      };
-    }
-    return {
-      action,
-      category: "permitted",
-      score: 100,
-      reasons: [reason("play-clue", [id], "The card is known to be playable.")],
-    };
-  };
+function judgePlay(judge: Judge, id: CardId): RankedMove {
+  const action = { type: "play", cardId: id } as const;
+  const { moment } = judge.knowledge;
+  const playable = (card: Card) => isPlayable(moment, card);
+  // Checked first: a prompt with several candidates plays the leftmost before its note is pinned.
+  // The clue promises the card is there, and its giver answers for the cards played on the way.
+  if (isOwed(judge, id)) {
+    const kind = isClued(moment, id) ? "prompt" : "finesse";
+    return move(action, "mandated", 100, [
+      reason(kind, [id], `A ${kind} is waiting on this card: play it now.`),
+    ]);
+  }
+  const note = judge.mine[id]!;
+  if (note.length === 0 || !note.every(playable)) {
+    return move(action, "violates", -40 - note.filter((card) => !playable(card)).length, [
+      reason(null, [id], "The card is not known to be playable, so it may misplay."),
+    ]);
+  }
+  return move(action, "permitted", 100, [
+    reason("play-clue", [id], "The card is known to be playable."),
+  ]);
+}
 
-  const discard = (id: CardId, anyClue: boolean): RankedMove => {
-    const action = { type: "discard", cardId: id } as const;
-    const note = mine[id]!;
-    if (note.length > 0 && note.every((card) => isTrash(card, id))) {
-      return {
-        action,
-        category: "permitted",
-        score: 15,
-        reasons: [reason("trash", [id], "The card is known trash.")],
-      };
-    }
-    if (countsAsClued(knowledge, id)) {
-      return {
-        action,
-        category: "violates",
-        score: -25,
-        reasons: [reason("good-touch", [id], "Clued cards will play one day: don't discard them.")],
-      };
-    }
-    if (id !== chop(knowledge, me)) {
-      return {
-        action,
-        category: "violates",
-        score: -12,
-        reasons: [reason("chop", [id], "Only the chop card is discarded.")],
-      };
-    }
-    const earlyGame = !view.log.some((event) => event.type === "discard");
-    if (earlyGame && anyClue && applies("early-game", level)) {
-      return {
-        action,
-        category: "violates",
-        score: -3,
-        reasons: [
-          reason(
-            "early-game",
-            [id],
-            "In the Early Game, every play and save clue is given before anyone discards.",
-          ),
-        ],
-      };
-    }
-    return {
-      action,
-      category: "permitted",
-      score: 10,
-      reasons: [reason("chop", [id], "Discarding chop.")],
-    };
-  };
-
-  const clue = (given: { target: Seat; clue: Clue; touched: CardId[] }): RankedMove => {
-    const { target, touched } = given;
-    const action = { type: "clue", target, clue: given.clue } as const;
-    const event: GameEvent = { type: "clue", seat: me, ...given };
-    const after = advance(view, knowledge, event);
-    const reading = after.readings.at(-1)!;
-    const said = `${clueName(given.clue)} to seat ${target}`;
-    const verdict = (category: Category, score: number, reasons: Reason[]): RankedMove => ({
-      action,
-      category,
-      score,
-      reasons,
-      reading,
-    });
-
-    const live = pending(reading);
-    if (live.length === 0) {
-      return verdict("violates", -2, [
-        reason(null, touched, `Cluing ${said} is neither a play clue nor a save clue.`),
-      ]);
-    }
-    const focusCard = truth(reading.focus)!;
-    const real = live.filter((interpretation) => isReal(interpretation, focusCard));
-    // How the receiver would read it: what they see, except their own hand. The viewer can't see
-    // their own hand either, so those cards count as anything the viewer thinks they could be.
-    const seen = receiverKnowledge(view, after, mine, target);
-    const kept = live.filter((interpretation) =>
-      couldBe(seen[reading.focus]!, interpretation.focusIdentity),
+/** Whether some clue's still-possible reading needs `id` to play now as a prompt or finesse. */
+function isOwed(judge: Judge, id: CardId): boolean {
+  const { knowledge, mine, view } = judge;
+  return knowledge.readings.some((reading) => {
+    // Only where every reading the viewer can't rule out needs the card: a self-prompt that may be
+    // a direct play clue owes nothing yet.
+    const live = pending(reading).filter((interpretation) =>
+      couldBe(mine[reading.focus]!, interpretation.focusIdentity),
     );
-    if (real.length === 0 || !kept.some((interpretation) => real.includes(interpretation))) {
-      const misread = uniqueNames(kept.length > 0 ? kept : live);
-      return verdict("violates", -30, [
-        reason(
-          null,
-          [reading.focus],
-          `Cluing ${said} would be read as ${misread}, but the card is the ${name(focusCard)}.`,
+    return (
+      live.length > 0 &&
+      live.every((interpretation) =>
+        interpretation.connections.some(
+          (connection) =>
+            connection.seat === view.seat &&
+            // A prompt can wait on a clued card the table knows will play first.
+            isPlayable(knowledge.moment, connection.card) &&
+            connectingCards(knowledge, connection).find((each) =>
+              couldBe(mine[each]!, connection.card),
+            ) === id,
         ),
-      ]);
-    }
+      )
+    );
+  });
+}
 
-    const reasons: Reason[] = [];
-    const saving = real.some((interpretation) => interpretation.kind === "save");
-    const primary = real.find((interpretation) => interpretation.kind === "save") ?? real[0]!;
-    const { conventions } = primary;
-    reasons.push(
+function judgeDiscard(judge: Judge, id: CardId, anyClue: boolean): RankedMove {
+  const action = { type: "discard", cardId: id } as const;
+  const { knowledge, view } = judge;
+  const note = judge.mine[id]!;
+  if (note.length > 0 && note.every((card) => judge.isTrash(card, id))) {
+    return move(action, "permitted", 15, [reason("trash", [id], "The card is known trash.")]);
+  }
+  if (countsAsClued(knowledge, id)) {
+    return move(action, "violates", -25, [
+      reason("good-touch", [id], "Clued cards will play one day: don't discard them."),
+    ]);
+  }
+  if (id !== chop(knowledge, view.seat)) {
+    return move(action, "violates", -12, [
+      reason("chop", [id], "Only the chop card is discarded."),
+    ]);
+  }
+  const earlyGame = !view.log.some((event) => event.type === "discard");
+  if (earlyGame && anyClue && judge.uses("early-game")) {
+    return move(action, "violates", -3, [
       reason(
-        mainConvention(primary),
-        [reading.focus],
-        `Cluing ${said} is a ${saving ? "save" : "play"} clue on the ${name(focusCard)}.`,
+        "early-game",
+        [id],
+        "In the Early Game, every play and save clue is given before anyone discards.",
       ),
-    );
+    ]);
+  }
+  return move(action, "permitted", 10, [reason("chop", [id], "Discarding chop.")]);
+}
 
-    // The 2 Save's Visible Rule: no 2 Save when the other copy is in someone else's hand, unless
-    // it is on their chop too.
-    if (conventions.includes("2-save")) {
-      const twin = moment.hands.findIndex(
-        (hand, seat) =>
-          seat !== target &&
-          hand.some((id) => truth(id) !== null && sameCard(truth(id)!, focusCard)),
-      );
-      const twinChop = twin === -1 ? null : chop(knowledge, twin);
-      const twinOnChop =
-        twinChop !== null && truth(twinChop) !== null && sameCard(truth(twinChop)!, focusCard);
-      if (twin !== -1 && !twinOnChop) {
-        return verdict("violates", -5, [
-          ...reasons,
-          reason(
-            "2-save",
-            [reading.focus],
-            `The other ${name(focusCard)} is visible in another hand, so it can't be 2 Saved.`,
-          ),
-        ]);
-      }
-    }
+/** A clue that means what the viewer intends, as the viewer sees it. */
+interface ClueCase extends Given {
+  readonly focus: CardId;
+  /** What the focus really is. */
+  readonly focusCard: Card;
+  /** The interpretations that are true, as the viewer sees the cards. Never empty. */
+  readonly real: readonly Interpretation[];
+  /** The interpretation the clue is mainly an example of: a save if it can be one. */
+  readonly primary: Interpretation;
+  readonly saving: boolean;
+  /** Newly touched cards that are trash, or a copy of a card touched before them. */
+  readonly bad: readonly CardId[];
+  /** Newly touched cards the clue gets played or saved. */
+  readonly gotten: readonly CardId[];
+}
 
-    const newlyTouched = touched.filter((id) => !countsAsClued(knowledge, id));
-    const bad = newlyTouched.filter((id, i) => {
-      const card = truth(id)!;
-      return (
-        isTrash(card, id) || newlyTouched.slice(0, i).some((other) => sameCard(truth(other)!, card))
-      );
-    });
-    const gotten = newlyTouched.filter((id) => !bad.includes(id));
-    if (gotten.length === 0 && applies("minimum-clue-value", level)) {
-      return verdict("violates", -1, [
-        ...reasons,
-        reason(
-          "minimum-clue-value",
-          touched,
-          "The clue gets no new card: every clue must get at least one new card played or saved.",
-        ),
-      ]);
-    }
-    let score = 10 * gotten.length;
-    score += 5 * real[0]!.connections.length;
-    if (playableNow(focusCard) && !saving) score += 10;
-    if (view.clueTokens === 1) score -= 5;
-    // The viewer can't see their own clued cards, so a card the clue gets may be one of them.
-    const risky = gotten.filter((id) => ownClued.some((own) => couldBe(mine[own]!, truth(id)!)));
-    if (risky.length > 0 && applies("good-touch", level)) {
-      const copy = reason(
-        "good-touch",
-        risky,
-        `${risky.map((id) => `The ${name(truth(id)!)}`).join(" and ")} may be a copy of one of your own clued cards.`,
-      );
-      // A play clue that may duplicate a clued card is a Good Touch mistake (the site's Sarcastic
-      // Discard example), so it's a last resort. A save still goes ahead: the Save Principle wins.
-      if (!saving) return verdict("violates", -4 - risky.length, [...reasons, copy]);
-      score -= 5 * risky.length;
-      reasons.push(copy);
-    }
+/** What a check finds: a convention the clue breaks, or a change to its score. */
+type Finding =
+  | { readonly violates: number; readonly reason: Reason }
+  | { readonly score: number; readonly reason: Reason; readonly mandated?: true };
 
-    if (bad.length > 0 && applies("good-touch", level)) {
-      const text = `It also touches ${bad.map((id) => `the ${name(truth(id)!)}`).join(" and ")}, which is trash.`;
-      if (!saving)
-        return verdict("violates", -15 - 5 * bad.length, [
-          ...reasons,
-          reason("good-touch", bad, text),
-        ]);
-      // Saving a card that must not be lost outweighs Good Touch.
-      score -= 10 * bad.length;
-      reasons.push(reason("good-touch", bad, `${text} The save is worth it.`));
-    }
+/**
+ * The checks a clue that means what the viewer intends goes through, in order. The first violation
+ * decides the clue; the other findings add up.
+ */
+const CLUE_CHECKS: readonly ((judge: Judge, clue: ClueCase) => Finding | undefined)[] = [
+  twoSaveVisibleRule,
+  minimumClueValue,
+  copiesOwnClued,
+  badTouch,
+  savePrinciple,
+];
 
-    if (urgentSave(view, knowledge, mine, target, reading.focus)) {
-      reasons.push(
-        reason(
-          "save-principle",
-          [reading.focus],
-          `The next player would discard the ${name(focusCard)} from chop: it must be saved.`,
-        ),
-      );
-      return verdict("mandated", score + 30, reasons);
-    }
-    return verdict("permitted", score, reasons);
-  };
+function judgeClue(judge: Judge, given: Given): RankedMove {
+  const { view, knowledge } = judge;
+  const action = { type: "clue", target: given.target, clue: given.clue } as const;
+  const after = advance(view, knowledge, { type: "clue", seat: view.seat, ...given });
+  const reading = after.readings.at(-1)!;
+  const said = `${clueName(given.clue)} to seat ${given.target}`;
+  const verdict = (category: Category, score: number, reasons: Reason[]) =>
+    move(action, category, score, reasons, reading);
 
-  /**
-   * Whether `interpretation` is the truth as the viewer sees it: the focus is the card it says,
-   * and every connecting card is where it says (the leftmost candidate, for a prompt).
-   */
-  function isReal(interpretation: Interpretation, focusCard: Card): boolean {
-    if (!sameCard(interpretation.focusIdentity, focusCard)) return false;
-    return interpretation.connections.every((connection) => {
-      if (hasPlayed(moment, connection.card)) return true;
-      const id = connectingCards(knowledge, connection)[0];
-      const card = id === undefined ? null : truth(id);
-      return card !== null && sameCard(card, connection.card);
-    });
+  const live = pending(reading);
+  if (live.length === 0) {
+    return verdict("violates", -2, [
+      reason(null, given.touched, `Cluing ${said} is neither a play clue nor a save clue.`),
+    ]);
+  }
+  const focusCard = judge.seen(reading.focus)!;
+  const real = live.filter((interpretation) => isReal(judge, interpretation, focusCard));
+  const kept = receiverKeeps(judge, after, given.target);
+  if (real.length === 0 || !kept.some((interpretation) => real.includes(interpretation))) {
+    const misread = uniqueNames(kept.length > 0 ? kept : live);
+    return verdict("violates", -30, [
+      reason(
+        null,
+        [reading.focus],
+        `Cluing ${said} would be read as ${misread}, but the card is the ${name(focusCard)}.`,
+      ),
+    ]);
   }
 
-  return { play, discard, clue };
+  const clue = describeClue(judge, given, reading.focus, real);
+  const reasons = [
+    reason(
+      mainConvention(clue.primary),
+      [clue.focus],
+      `Cluing ${said} is a ${clue.saving ? "save" : "play"} clue on the ${name(focusCard)}.`,
+    ),
+  ];
+  let score = clueValue(judge, clue);
+  let category: Category = "permitted";
+  for (const check of CLUE_CHECKS) {
+    const finding = check(judge, clue);
+    if (finding === undefined) continue;
+    if ("violates" in finding) {
+      return verdict("violates", finding.violates, [...reasons, finding.reason]);
+    }
+    score += finding.score;
+    reasons.push(finding.reason);
+    if (finding.mandated) category = "mandated";
+  }
+  return verdict(category, score, reasons);
+}
+
+const isSave = (interpretation: Interpretation) => interpretation.kind === "save";
+
+function describeClue(
+  judge: Judge,
+  given: Given,
+  focus: CardId,
+  real: readonly Interpretation[],
+): ClueCase {
+  const { knowledge, seen, isTrash } = judge;
+  const newlyTouched = given.touched.filter((id) => !countsAsClued(knowledge, id));
+  const bad = newlyTouched.filter((id, i) => {
+    const card = seen(id)!;
+    return (
+      isTrash(card, id) || newlyTouched.slice(0, i).some((other) => sameCard(seen(other)!, card))
+    );
+  });
+  return {
+    ...given,
+    focus,
+    focusCard: seen(focus)!,
+    real,
+    primary: real.find(isSave) ?? real[0]!,
+    saving: real.some(isSave),
+    bad,
+    gotten: newlyTouched.filter((id) => !bad.includes(id)),
+  };
+}
+
+/**
+ * What a clue is worth before the checks: each card it gets, each connection, a card to play now;
+ * less if it spends the last clue token.
+ */
+function clueValue(judge: Judge, clue: ClueCase): number {
+  let score = 10 * clue.gotten.length + 5 * clue.real[0]!.connections.length;
+  if (isPlayable(judge.knowledge.moment, clue.focusCard) && !clue.saving) score += 10;
+  if (judge.view.clueTokens === 1) score -= 5;
+  return score;
+}
+
+/** The 2 Save's Visible Rule: no 2 Save when the other copy is in someone else's hand, unless it
+ * is on their chop too. */
+function twoSaveVisibleRule(judge: Judge, clue: ClueCase): Finding | undefined {
+  if (!clue.primary.conventions.includes("2-save")) return undefined;
+  const { knowledge, seen } = judge;
+  const isTwin = (id: CardId | null) => {
+    const card = id === null ? null : seen(id);
+    return card !== null && sameCard(card, clue.focusCard);
+  };
+  const twin = knowledge.moment.hands.findIndex(
+    (hand, seat) => seat !== clue.target && hand.some(isTwin),
+  );
+  if (twin === -1 || isTwin(chop(knowledge, twin))) return undefined;
+  const text = `The other ${name(clue.focusCard)} is visible in another hand, so it can't be 2 Saved.`;
+  return { violates: -5, reason: reason("2-save", [clue.focus], text) };
+}
+
+/** Minimum Clue Value: every clue gets at least one new card played or saved. */
+function minimumClueValue(judge: Judge, clue: ClueCase): Finding | undefined {
+  if (clue.gotten.length > 0 || !judge.uses("minimum-clue-value")) return undefined;
+  const text =
+    "The clue gets no new card: every clue must get at least one new card played or saved.";
+  return { violates: -1, reason: reason("minimum-clue-value", clue.touched, text) };
+}
+
+/**
+ * Good Touch, for the cards the viewer can't see: a card the clue gets may be a copy of one of the
+ * viewer's own clued cards.
+ */
+function copiesOwnClued(judge: Judge, clue: ClueCase): Finding | undefined {
+  if (!judge.uses("good-touch")) return undefined;
+  const { knowledge, mine, seen, view } = judge;
+  const ownClued = knowledge.moment.hands[view.seat]!.filter((id) => countsAsClued(knowledge, id));
+  const risky = clue.gotten.filter((id) => ownClued.some((own) => couldBe(mine[own]!, seen(id)!)));
+  if (risky.length === 0) return undefined;
+  const cards = risky.map((id) => `The ${name(seen(id)!)}`).join(" and ");
+  const found = reason(
+    "good-touch",
+    risky,
+    `${cards} may be a copy of one of your own clued cards.`,
+  );
+  // A play clue that may duplicate a clued card is a Good Touch mistake (the site's Sarcastic
+  // Discard example), so it's a last resort. A save still goes ahead: the Save Principle wins.
+  return clue.saving
+    ? { score: -5 * risky.length, reason: found }
+    : { violates: -4 - risky.length, reason: found };
+}
+
+/** Good Touch: the clue touches no trash, unless it saves a card that must not be lost. */
+function badTouch(judge: Judge, clue: ClueCase): Finding | undefined {
+  const { bad } = clue;
+  if (bad.length === 0 || !judge.uses("good-touch")) return undefined;
+  const cards = bad.map((id) => `the ${name(judge.seen(id)!)}`).join(" and ");
+  const text = `It also touches ${cards}, which is trash.`;
+  if (!clue.saving)
+    return { violates: -15 - 5 * bad.length, reason: reason("good-touch", bad, text) };
+  // Saving a card that must not be lost outweighs Good Touch.
+  return {
+    score: -10 * bad.length,
+    reason: reason("good-touch", bad, `${text} The save is worth it.`),
+  };
+}
+
+/** The Save Principle: a card about to be discarded from the next player's chop must be saved. */
+function savePrinciple(judge: Judge, clue: ClueCase): Finding | undefined {
+  if (!isUrgentSave(judge, clue.target, clue.focus)) return undefined;
+  const text = `The next player would discard the ${name(clue.focusCard)} from chop: it must be saved.`;
+  return { score: 30, mandated: true, reason: reason("save-principle", [clue.focus], text) };
+}
+
+/**
+ * Whether `interpretation` is the truth as the viewer sees it: the focus is the card it says, and
+ * every connecting card is where it says (the leftmost candidate, for a prompt).
+ */
+function isReal(judge: Judge, interpretation: Interpretation, focusCard: Card): boolean {
+  const { knowledge, seen } = judge;
+  if (!sameCard(interpretation.focusIdentity, focusCard)) return false;
+  return interpretation.connections.every((connection) => {
+    if (hasPlayed(knowledge.moment, connection.card)) return true;
+    const id = connectingCards(knowledge, connection)[0];
+    const card = id === undefined ? null : seen(id);
+    return card !== null && sameCard(card, connection.card);
+  });
 }
 
 const uniqueNames = (interpretations: readonly Interpretation[]) =>
@@ -417,56 +476,46 @@ function mainConvention(interpretation: Interpretation): ConventionId {
 }
 
 /**
- * What the clue receiver would know after the clue: they see every card the viewer sees except
- * their own hand, and the viewer's own cards, which count as anything the viewer thinks they
- * could be.
+ * The interpretations the clue receiver would keep after the clue: they see every card the viewer
+ * sees except their own hand. The viewer can't see their own hand either, so those cards count as
+ * anything the viewer thinks they could be.
  */
-function receiverKnowledge(
-  view: PlayerView,
-  after: Knowledge,
-  mine: readonly Note[],
-  receiver: Seat,
-): Note[] {
+function receiverKeeps(judge: Judge, after: Knowledge, receiver: Seat): Interpretation[] {
+  const { view, mine } = judge;
+  const reading = after.readings.at(-1)!;
   const theirs = new Set(after.moment.hands[receiver]);
   const ours = new Set(after.moment.hands[view.seat]);
   const cards = view.cards.map((card) => (theirs.has(card.id) ? { ...card, card: null } : card));
-  const common = after.common.map((note, id) => {
-    if (!ours.has(id)) return note;
-    return narrowed(note, (card) => couldBe(mine[id]!, card));
-  });
-  return privateKnowledge({ config: view.config, cards }, { ...after, common });
+  const common = after.common.map((note, id) =>
+    ours.has(id) ? narrowed(note, (card) => couldBe(mine[id]!, card)) : note,
+  );
+  const known = privateKnowledge({ config: view.config, cards }, { ...after, common });
+  return pending(reading).filter((interpretation) =>
+    couldBe(known[reading.focus]!, interpretation.focusIdentity),
+  );
 }
 
 /**
  * Whether `id` is a card the Save Principle protects on the next player's chop, with nothing else
  * for them to do first: no card the table knows is playable and no known trash to discard.
  */
-function urgentSave(
-  view: PlayerView,
-  knowledge: Knowledge,
-  mine: readonly Note[],
-  target: Seat,
-  id: CardId,
-): boolean {
-  const { level, moment } = knowledge;
-  if (!applies("save-principle", level)) return false;
+function isUrgentSave(judge: Judge, target: Seat, id: CardId): boolean {
+  const { view, knowledge, facts, mine } = judge;
+  const { moment } = knowledge;
+  if (!judge.uses("save-principle")) return false;
   if (target !== (view.seat + 1) % view.config.numPlayers || id !== chop(knowledge, target)) {
     return false;
   }
-  const card = view.cards[id]!.card!;
-  const facts = tableFacts(view, knowledge);
+  const card = judge.seen(id)!;
   const visible = (other: Card) =>
     moment.hands.some((hand, seat) =>
       hand.some((cardId) => {
         if (cardId === id) return false;
-        const seen = view.cards[cardId]!.card;
+        const seen = judge.seen(cardId);
         if (seen !== null) return sameCard(seen, other);
         // The viewer's own cards count only where the viewer knows them.
-        return (
-          seat === view.seat &&
-          identity(mine[cardId]!) !== undefined &&
-          sameCard(identity(mine[cardId]!)!, other)
-        );
+        const known = identity(mine[cardId]!);
+        return seat === view.seat && known !== undefined && sameCard(known, other);
       }),
     );
   const protectedCard =

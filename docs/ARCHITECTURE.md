@@ -187,7 +187,7 @@ deck make the game's replay.
 
 The simulator CLI (`pnpm simulate`) plays seeded self-play games with every seat on `hgroupSeat` and
 prints the mean score, perfect games, strikeouts and the worst seed per player count. `--verbose` prints
-every move with its category and reasons. Game i of a batch is dealt from seed + i, so a seed reproduces a
+every move with its category and reasons, and `--review` prints each game's review (see "Game review"). Game i of a batch is dealt from seed + i, so a seed reproduces a
 game. It is for exploring how the engine plays; nothing gates on its numbers.
 
 ## Decision engine
@@ -262,7 +262,12 @@ output shape.
 ### Game review
 
 `reviewGame(replay, level)` evaluates every turn from the acting player's view and reports where the move
-actually made landed: its category, its rank and the top alternative. The simulator CLI can print it.
+actually made landed: its category, score and reasons, its rank and the top alternative. `reviewMove(view,
+action, level)` does the same for one move. A move's rank is one more than the number of moves ranked strictly ahead of it, so
+moves tied on category and score share a rank. The top alternative is the best move other than the one
+made: the runner-up when the move made ranked first. A move that breaks a convention, a teammate's
+off-convention move included, shows up as a `violates` move. `pnpm simulate --review` prints the review of
+each self-play game, where every move ranks first, so it shows how close the runner-up was.
 
 ## Replays
 

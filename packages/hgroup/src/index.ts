@@ -1,4 +1,4 @@
-// H-Group convention reading, card-possibility deduction and move ranking. See docs/ARCHITECTURE.md.
+// H-Group convention reading, card-possibility deduction, move ranking and game review. See docs/ARCHITECTURE.md.
 export {
   clueMatches,
   cluePossibilities,
@@ -26,3 +26,4 @@ export {
   type Table,
 } from "./knowledge.ts";
 export { type Category, rankMoves, type RankedMove, type Reason } from "./moves.ts";
+export { reviewGame, reviewMove, type TurnReview } from "./review.ts";

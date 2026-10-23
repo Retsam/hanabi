@@ -1,8 +1,15 @@
 // The simulator CLI: runs H-Group self-play games and prints their scores. Run with
 // `pnpm simulate --help`.
 import { parseArgs } from "node:util";
-import type { RankedMove } from "@hanabi/hgroup";
-import { describeEnd, describeEvent, describeMove, describeSummary } from "./report.ts";
+import { replay } from "@hanabi/engine";
+import { type RankedMove, reviewGame } from "@hanabi/hgroup";
+import {
+  describeEnd,
+  describeEvent,
+  describeMove,
+  describeReview,
+  describeSummary,
+} from "./report.ts";
 import { type GameResult, type PlayerCount, selfPlay, summarize } from "./simulate.ts";
 
 const USAGE = `Usage: pnpm simulate [options]
@@ -16,6 +23,7 @@ Options:
   --seed <n>        Seed of the first game (default 1)
   --level <n>       H-Group level of the table (default 1)
   --verbose         Print every move with its category and reasons
+  --review          Print each game's review: every move, where it ranked and the next best move
   --help            Show this help`;
 
 const { values } = parseArgs({
@@ -25,6 +33,7 @@ const { values } = parseArgs({
     seed: { type: "string", default: "1" },
     level: { type: "string", default: "1" },
     verbose: { type: "boolean", default: false },
+    review: { type: "boolean", default: false },
     help: { type: "boolean", default: false },
   },
 });
@@ -59,19 +68,32 @@ const level = integer("level", values.level, 0);
 for (const numPlayers of players) {
   const results: GameResult[] = [];
   for (let i = 0; i < games; i++) {
-    if (!values.verbose) {
+    if (!values.verbose && !values.review) {
       results.push(await selfPlay(numPlayers, seed + i, level));
       continue;
     }
     console.log(`\n${numPlayers}p game, seed ${seed + i}`);
     let chosen: RankedMove | undefined;
-    const result = await selfPlay(numPlayers, seed + i, level, {
-      onChoose: (move) => (chosen = move),
-      onEvent: (event, state) => {
-        console.log(`${state.turn}. ${describeEvent(event, state)}`);
-        if (chosen !== undefined) console.log(describeMove(chosen));
-      },
-    });
+    const result = await selfPlay(
+      numPlayers,
+      seed + i,
+      level,
+      values.verbose
+        ? {
+            onChoose: (move) => (chosen = move),
+            onEvent: (event, state) => {
+              console.log(`${state.turn}. ${describeEvent(event, state)}`);
+              if (chosen !== undefined) console.log(describeMove(chosen));
+            },
+          }
+        : {},
+    );
+    if (values.review) {
+      const { states, events } = replay(result.replay);
+      for (const [turn, review] of reviewGame(result.replay, level).entries()) {
+        console.log(describeReview(review, states[turn]!, events[turn]!));
+      }
+    }
     console.log(describeEnd(result.state, result.score));
     results.push(result);
   }

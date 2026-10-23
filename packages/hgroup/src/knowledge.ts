@@ -242,80 +242,123 @@ function startingNotes(view: PlayerView, moment: Moment): Note[] {
  * public information. A player narrows it further with the cards they see (`privateKnowledge`).
  */
 export function readClue(view: PlayerView, table: Table, given: GivenClue): ClueReading {
-  const { level, moment, common } = table;
-  const { target, clue, touched } = given;
-  const facts = tableFacts(view, table);
+  const uses = (convention: ConventionId) => applies(convention, table.level);
+  const focus = clueFocus(table, given);
+  const giverClued = table.moment.hands[given.giver]!.filter((id) => countsAsClued(table, id));
+  const offConvention = { ...given, giverClued, focus, interpretations: [], conventions: [] };
+  if (!uses("clue-focus") || !uses("play-clue")) return offConvention;
 
+  const read: ClueOnTable = {
+    view,
+    table,
+    given,
+    focus,
+    facts: tableFacts(view, table),
+    candidates: table.common[focus]!.filter((card) => clueMatches(card, given.clue)),
+    uses,
+  };
+  const onChop = focus === chop(table, given.target);
+  const saves = onChop && uses("save-clue");
+  const rankSave = saves ? rankSaveFor(read) : undefined;
+  const interpretations = [
+    ...(saves ? saveReadings(read, rankSave) : []),
+    // A 5 or 2 clue on chop is a save, never a play clue.
+    ...(rankSave === undefined ? playReadings(read) : []),
+  ];
+  if (interpretations.length === 0) return offConvention;
+
+  const conventions = uniqBy<ConventionId>([
+    "clue-focus",
+    ...interpretations.flatMap((interpretation) => interpretation.conventions),
+  ]);
+  const othersTouched = given.touched.some((id) => id !== focus && !countsAsClued(table, id));
+  if (othersTouched && uses("good-touch")) conventions.push("good-touch");
+  return { ...given, giverClued, focus, interpretations, conventions };
+}
+
+/** A clue being read: the table it is given on, its focus, and what the focus could be. */
+interface ClueOnTable {
+  readonly view: PlayerView;
+  readonly table: Table;
+  readonly given: GivenClue;
+  readonly focus: CardId;
+  readonly facts: TableFacts;
+  /** What the table thought the focus could be, narrowed to what the clue touches. */
+  readonly candidates: Note;
+  /** Whether a convention is in force at the table's level. */
+  readonly uses: (convention: ConventionId) => boolean;
+}
+
+const readAs = (
+  kind: Interpretation["kind"],
+  focusIdentity: Card,
+  conventions: ConventionId[],
+  connections: Connection[] = [],
+): Interpretation => ({ kind, focusIdentity, connections, conventions, ruledOutOn: null });
+
+/**
+ * The card a clue is about (`clue-focus`): the chop if the clue newly touched it, else the leftmost
+ * newly touched card, else (a clue that touches nothing new) the leftmost card it touches.
+ */
+function clueFocus(table: Table, { target, touched }: GivenClue): CardId {
   const newlyTouched = touched.filter((id) => !countsAsClued(table, id));
   const chopId = chop(table, target);
-  const onChop = chopId !== null && newlyTouched.includes(chopId);
-  const focus = newlyTouched.length === 0 ? touched[0]! : onChop ? chopId : newlyTouched[0]!;
-  const interpretations: Interpretation[] = [];
-  const giverClued = moment.hands[given.giver]!.filter((id) => countsAsClued(table, id));
-  const offConvention = { ...given, giverClued, focus, interpretations, conventions: [] };
-  if (!applies("clue-focus", level) || !applies("play-clue", level)) return offConvention;
+  if (chopId !== null && newlyTouched.includes(chopId)) return chopId;
+  return newlyTouched[0] ?? touched[0]!;
+}
 
-  const candidates = common[focus]!.filter((card) => clueMatches(card, clue));
-  const add = (
-    kind: Interpretation["kind"],
-    card: Card,
-    conventions: ConventionId[],
-    connections: Connection[] = [],
-  ) =>
-    interpretations.push({ kind, focusIdentity: card, connections, conventions, ruledOutOn: null });
+/** The save a rank clue on chop always is: a 5 Save or a 2 Save. */
+function rankSaveFor({ given: { clue }, uses }: ClueOnTable): "5-save" | "2-save" | undefined {
+  if (clue.kind !== "rank") return undefined;
+  if (clue.value === 5 && uses("5-save")) return "5-save";
+  if (clue.value === 2 && uses("2-save")) return "2-save";
+  return undefined;
+}
 
-  /** Who could be holding `card` for this clue, as a prompt or a finesse. */
-  const connect = (card: Card) => connectionsFor(view, table, given, focus, card, facts);
-
-  let plays = true;
-  if (onChop && applies("save-clue", level)) {
-    const rankSave =
-      clue.kind === "rank" && clue.value === 5 && applies("5-save", level)
-        ? "5-save"
-        : clue.kind === "rank" && clue.value === 2 && applies("2-save", level)
-          ? "2-save"
-          : undefined;
-    if (rankSave !== undefined) {
-      // A 5 or 2 clue on chop is a save, never a play clue.
-      plays = false;
-      for (const card of candidates) {
-        if (!facts.isTrash(card, focus)) add("save", card, ["save-clue", rankSave]);
-      }
-    } else if (applies("critical-save", level)) {
-      // A 5 is only saved with a 5 clue; any other clue on it is a play clue.
-      for (const card of candidates) {
-        if (card.rank !== 5 && facts.isCritical(card)) {
-          add("save", card, ["save-clue", "critical-save"]);
-        }
-      }
-    }
+/**
+ * The saves a clue on chop can be: a 5 or 2 Save on any of those that isn't trash, or a Critical
+ * Save on a critical card.
+ */
+function saveReadings(read: ClueOnTable, rankSave: "5-save" | "2-save" | undefined) {
+  const { candidates, facts, focus } = read;
+  if (rankSave !== undefined) {
+    return candidates
+      .filter((card) => !facts.isTrash(card, focus))
+      .map((card) => readAs("save", card, ["save-clue", rankSave]));
   }
-  for (const suit of plays ? view.config.suits : []) {
-    const next = facts.next(suit);
-    if (next === undefined) continue;
-    const now = isPlayable(moment, next);
-    if (couldBe(candidates, next) && now) add("play", next, ["play-clue"]);
-    if (couldBe(candidates, next) && !now && applies("delayed-play-clue", level)) {
-      add("play", next, ["play-clue", "delayed-play-clue"]);
-    }
-    // One card further on, if a prompt or a finesse can supply the card in between.
-    const beyond = RANKS.find((rank) => rank === next.rank + 1);
-    if (beyond === undefined) continue;
-    const card = { suit, rank: beyond };
-    if (!couldBe(candidates, card) || facts.isTrash(card, focus)) continue;
-    for (const { connection, conventions } of connect(next)) {
-      add("play", card, ["play-clue", ...conventions], [connection]);
-    }
-  }
+  if (!read.uses("critical-save")) return [];
+  // A 5 is only saved with a 5 clue; any other clue on it is a play clue.
+  return candidates
+    .filter((card) => card.rank !== 5 && facts.isCritical(card))
+    .map((card) => readAs("save", card, ["save-clue", "critical-save"]));
+}
 
-  if (interpretations.length === 0) return offConvention;
-  const conventions: ConventionId[] = ["clue-focus"];
-  for (const id of interpretations.flatMap((interpretation) => interpretation.conventions)) {
-    if (!conventions.includes(id)) conventions.push(id);
-  }
-  const othersTouched = newlyTouched.some((id) => id !== focus);
-  if (othersTouched && applies("good-touch", level)) conventions.push("good-touch");
-  return { ...given, giverClued, focus, interpretations, conventions };
+/** The play clues a clue can be, suit by suit: on the card its suit needs next, or one beyond. */
+function playReadings(read: ClueOnTable): Interpretation[] {
+  return read.view.config.suits.flatMap((suit) => {
+    const next = read.facts.next(suit);
+    if (next === undefined) return [];
+    return [...directPlay(read, next), ...connectedPlay(read, next)];
+  });
+}
+
+/** A play clue on `next`, the card its suit needs: playable now, or once the clued cards before it play. */
+function directPlay(read: ClueOnTable, next: Card): Interpretation[] {
+  if (!couldBe(read.candidates, next)) return [];
+  if (isPlayable(read.table.moment, next)) return [readAs("play", next, ["play-clue"])];
+  if (!read.uses("delayed-play-clue")) return [];
+  return [readAs("play", next, ["play-clue", "delayed-play-clue"])];
+}
+
+/** A play clue on the card after `next`, with a prompt or finesse supplying `next`. */
+function connectedPlay(read: ClueOnTable, next: Card): Interpretation[] {
+  const rank = RANKS.find((each) => each === next.rank + 1);
+  if (rank === undefined) return [];
+  const card = { suit: next.suit, rank };
+  if (!couldBe(read.candidates, card) || read.facts.isTrash(card, read.focus)) return [];
+  return connectionsFor(read, next).map(({ connection, conventions }) =>
+    readAs("play", card, ["play-clue", ...conventions], [connection]),
+  );
 }
 
 /**
@@ -328,33 +371,29 @@ export function readClue(view: PlayerView, table: Table, given: GivenClue): Clue
  *   (`prompts-before-finesses`), and `card` is playable now, so their finesse position blind-plays.
  */
 function connectionsFor(
-  view: PlayerView,
-  table: Table,
-  given: GivenClue,
-  focus: CardId,
+  read: ClueOnTable,
   card: Card,
-  facts: TableFacts,
 ): { connection: Connection; conventions: ConventionId[] }[] {
-  const { level, moment, common } = table;
-  const { giver, target } = given;
-  const seats = seatsAfter(giver, view.config.numPlayers);
+  const { table, given, focus, facts, uses } = read;
+  const { moment, common } = table;
+  const seats = seatsAfter(given.giver, read.view.config.numPlayers);
   const result: { connection: Connection; conventions: ConventionId[] }[] = [];
 
   for (const seat of seats) {
-    const beforeReceiver = seats.indexOf(seat) < seats.indexOf(target);
+    const beforeReceiver = seats.indexOf(seat) < seats.indexOf(given.target);
     const ids = moment.hands[seat]!.filter(
       (id) => id !== focus && isClued(moment, id) && couldBe(common[id]!, card),
     );
     if (ids.length > 0) {
       const anyway = ids.every((id) => common[id]!.every((other) => facts.isNext(other)));
       const kind = anyway ? "delayed-play-clue" : "prompt";
-      if (!applies(kind, level)) continue;
+      if (!uses(kind)) continue;
       const conventions: ConventionId[] = [kind];
-      if (!anyway && beforeReceiver && applies("prompts-before-finesses", level)) {
+      if (!anyway && beforeReceiver && uses("prompts-before-finesses")) {
         conventions.push("prompts-before-finesses");
       }
       result.push({ connection: { kind: "prompt", seat, card, ids }, conventions });
-    } else if (beforeReceiver && applies("finesse", level) && isPlayable(moment, card)) {
+    } else if (beforeReceiver && uses("finesse") && isPlayable(moment, card)) {
       const id = finessePosition(table, seat);
       if (id === undefined) continue;
       result.push({

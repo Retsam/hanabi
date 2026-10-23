@@ -23,7 +23,7 @@ import {
   type Sight,
 } from "./possibilities.ts";
 import { couldBe, identity, narrowed, type Note, sameSizes } from "./notes.ts";
-import { fixpoint, seatsAfter, uniqBy } from "./util.ts";
+import { assert, fixpoint, seatsAfter, uniqBy } from "./util.ts";
 
 /** The table at one moment and what every player agreed each card could be by then. */
 export interface Table {
@@ -171,8 +171,12 @@ export function finessePosition(
   return table.moment.hands[seat]!.find((id) => !countsAsClued(table, id));
 }
 
-/** How many cards of `suit` have been played. */
-export const stackHeight = (moment: Moment, suit: string) => moment.stacks[suit] ?? 0;
+/** How many cards of `suit` have been played. Every suit in the config has a stack. */
+export function stackHeight(moment: Moment, suit: string): number {
+  const height = moment.stacks[suit];
+  assert(height !== undefined, `No stack for suit ${suit}`);
+  return height;
+}
 
 /** Whether `card` is on its stack already. */
 export const hasPlayed = (moment: Moment, card: Card) =>

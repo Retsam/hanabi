@@ -36,14 +36,14 @@ packages/
   hgroup/      @hanabi/hgroup     card deduction, H-Group convention reading, move ranking, game review
   ai/          @hanabi/ai         seat interface, game runner, simulator CLI
 apps/
-  web/         (later)            play UI and replay viewer
+  web/         @hanabi/web        play UI (Vite + React), later the replay viewer
 docs/
   conventions/                    specs of the implemented H-Group conventions
 ```
 
 Packages are private and consumed as TypeScript source: each package's `exports` points at
-`src/index.ts` and TypeScript uses `"moduleResolution": "bundler"`. There is no build step until the UI
-needs one. Relative imports name the `.ts` file and code sticks to erasable syntax
+`src/index.ts` and TypeScript uses `"moduleResolution": "bundler"`. Only `apps/web` has a build step: Vite
+bundles the packages' source along with it, and it has its own `tsconfig.json` for the DOM and JSX. Relative imports name the `.ts` file and code sticks to erasable syntax
 (`erasableSyntaxOnly`), so Node runs the source directly, as the simulator CLI does.
 
 Dependency direction is one-way: `engine` ← `hgroup` ← `ai` ← `apps/web`.
@@ -176,7 +176,8 @@ interface SeatController {
 }
 ```
 
-A human seat is a promise the UI resolves. Async also leaves room for running AIs in a Web Worker. A
+A human seat is a promise the UI resolves (`humanSeat` in `apps/web`). The web app keeps the full state
+out of React: a session plays the game with `runGame` and hands the UI only the human's `PlayerView`. Async also leaves room for running AIs in a Web Worker. A
 helper (`syncSeat`) wraps simple synchronous AIs. The only AI is the H-Group decision engine below: its
 seat controller (`hgroupSeat(level)`) plays the top-ranked move. There is no separate simple rule-based AI.
 

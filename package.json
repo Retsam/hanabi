@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "typecheck": "tsc",
+    "dev": "pnpm --filter @hanabi/web dev",
+    "typecheck": "tsc && tsc -p apps/web",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "oxlint --type-aware",

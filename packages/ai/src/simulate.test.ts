@@ -1,7 +1,8 @@
 import { standardConfig } from "@hanabi/engine";
 import { deal } from "@hanabi/engine/testing";
 import { describe, expect, it } from "vitest";
-import { type GameResult, summarize } from "./simulate.ts";
+import { reviewGame } from "@hanabi/hgroup";
+import { type GameResult, selfPlay, summarize } from "./simulate.ts";
 
 const { state } = deal({
   hands: [
@@ -42,5 +43,14 @@ describe("summarize", () => {
 
   it("throws on an empty batch", () => {
     expect(() => summarize([])).toThrow("No games to summarize");
+  });
+});
+
+describe("selfPlay", () => {
+  it("plays the top-ranked move on every turn, as a review of the game shows", async () => {
+    const { replay } = await selfPlay(2, 1, 1);
+    const reviews = reviewGame(replay, 1);
+    expect(reviews).toHaveLength(replay.actions.length);
+    expect(reviews.every((review) => review.rank === 1)).toBe(true);
   });
 });

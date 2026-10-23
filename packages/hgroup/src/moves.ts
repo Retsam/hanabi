@@ -20,6 +20,7 @@ import {
   hasPlayed,
   type Interpretation,
   isClued,
+  isPlayable,
   type Knowledge,
   pending,
   privateKnowledge,
@@ -27,7 +28,8 @@ import {
   tableFacts,
 } from "./knowledge.ts";
 import { clueMatches, sameCard } from "./possibilities.ts";
-import { uniqBy } from "./util.ts";
+import { couldBe, identity, narrowed, type Note } from "./notes.ts";
+import { seatsAfter, uniqBy } from "./util.ts";
 
 /**
  * How a move stands under the conventions: one the player is obliged to make, one they may make,
@@ -93,10 +95,8 @@ function cluesFor(view: PlayerView): { target: Seat; clue: Clue; touched: CardId
     ...view.config.suits.map((value) => ({ kind: "color", value }) as const),
     ...RANKS.map((value) => ({ kind: "rank", value }) as const),
   ];
-  const players = view.config.numPlayers;
   const result = [];
-  for (let step = 1; step < players; step++) {
-    const target = (view.seat + step) % players;
+  for (const target of seatsAfter(view.seat, view.config.numPlayers)) {
     for (const clue of clues) {
       const touched = view.hands[target]!.filter((id) => clueMatches(view.cards[id]!.card!, clue));
       if (touched.length > 0) result.push({ target, clue, touched });
@@ -121,8 +121,7 @@ function judgement(view: PlayerView, knowledge: Knowledge) {
   const facts = tableFacts(view, knowledge);
   const mine = privateKnowledge(view, knowledge);
   const truth = (id: CardId) => view.cards[id]!.card;
-  const stack = (card: Card) => moment.stacks[card.suit] ?? 0;
-  const playableNow = (card: Card) => card.rank === stack(card) + 1;
+  const playableNow = (card: Card) => isPlayable(moment, card);
 
   const ownClued = moment.hands[me]!.filter((id) => countsAsClued(knowledge, id));
   /** Clued cards in other hands, which the viewer sees: Good Touch says they will all play. */
@@ -141,7 +140,7 @@ function judgement(view: PlayerView, knowledge: Knowledge) {
       // Only where every reading the viewer can't rule out needs the card: a self-prompt that may
       // be a direct play clue owes nothing yet.
       const live = pending(reading).filter((interpretation) =>
-        mine[reading.focus]!.some((card) => sameCard(card, interpretation.focusIdentity)),
+        couldBe(mine[reading.focus]!, interpretation.focusIdentity),
       );
       return (
         live.length > 0 &&
@@ -152,7 +151,7 @@ function judgement(view: PlayerView, knowledge: Knowledge) {
               // A prompt can wait on a clued card the table knows will play first.
               playableNow(connection.card) &&
               connectingCards(knowledge, connection).find((each) =>
-                mine[each]!.some((card) => sameCard(card, connection.card)),
+                couldBe(mine[each]!, connection.card),
               ) === id,
           ),
         )
@@ -266,7 +265,7 @@ function judgement(view: PlayerView, knowledge: Knowledge) {
     // their own hand either, so those cards count as anything the viewer thinks they could be.
     const seen = receiverKnowledge(view, after, mine, target);
     const kept = live.filter((interpretation) =>
-      seen[reading.focus]!.some((card) => sameCard(card, interpretation.focusIdentity)),
+      couldBe(seen[reading.focus]!, interpretation.focusIdentity),
     );
     if (real.length === 0 || !kept.some((interpretation) => real.includes(interpretation))) {
       const misread = uniqueNames(kept.length > 0 ? kept : live);
@@ -337,9 +336,7 @@ function judgement(view: PlayerView, knowledge: Knowledge) {
     if (playableNow(focusCard) && !saving) score += 10;
     if (view.clueTokens === 1) score -= 5;
     // The viewer can't see their own clued cards, so a card the clue gets may be one of them.
-    const risky = gotten.filter((id) =>
-      ownClued.some((own) => mine[own]!.some((card) => sameCard(card, truth(id)!))),
-    );
+    const risky = gotten.filter((id) => ownClued.some((own) => couldBe(mine[own]!, truth(id)!)));
     if (risky.length > 0 && applies("good-touch", level)) {
       const copy = reason(
         "good-touch",
@@ -427,16 +424,15 @@ function mainConvention(interpretation: Interpretation): ConventionId {
 function receiverKnowledge(
   view: PlayerView,
   after: Knowledge,
-  mine: readonly (readonly Card[])[],
+  mine: readonly Note[],
   receiver: Seat,
-): (readonly Card[])[] {
+): Note[] {
   const theirs = new Set(after.moment.hands[receiver]);
   const ours = new Set(after.moment.hands[view.seat]);
   const cards = view.cards.map((card) => (theirs.has(card.id) ? { ...card, card: null } : card));
   const common = after.common.map((note, id) => {
     if (!ours.has(id)) return note;
-    const narrowed = note.filter((card) => mine[id]!.some((other) => sameCard(other, card)));
-    return narrowed.length > 0 ? narrowed : note;
+    return narrowed(note, (card) => couldBe(mine[id]!, card));
   });
   return privateKnowledge({ config: view.config, cards }, { ...after, common });
 }
@@ -448,7 +444,7 @@ function receiverKnowledge(
 function urgentSave(
   view: PlayerView,
   knowledge: Knowledge,
-  mine: readonly (readonly Card[])[],
+  mine: readonly Note[],
   target: Seat,
   id: CardId,
 ): boolean {
@@ -459,7 +455,6 @@ function urgentSave(
   }
   const card = view.cards[id]!.card!;
   const facts = tableFacts(view, knowledge);
-  const stack = moment.stacks[card.suit] ?? 0;
   const visible = (other: Card) =>
     moment.hands.some((hand, seat) =>
       hand.some((cardId) => {
@@ -468,7 +463,9 @@ function urgentSave(
         if (seen !== null) return sameCard(seen, other);
         // The viewer's own cards count only where the viewer knows them.
         return (
-          seat === view.seat && mine[cardId]!.length === 1 && sameCard(mine[cardId]![0]!, other)
+          seat === view.seat &&
+          identity(mine[cardId]!) !== undefined &&
+          sameCard(identity(mine[cardId]!)!, other)
         );
       }),
     );
@@ -477,14 +474,13 @@ function urgentSave(
     (card.rank === 5 ||
       facts.isCritical(card) ||
       (card.rank === 2 && !visible(card)) ||
-      (card.rank === stack + 1 && !visible(card)));
+      (isPlayable(moment, card) && !visible(card)));
   if (!protectedCard) return false;
   const busy = moment.hands[target]!.some((other) => {
     const note = knowledge.common[other]!;
     return (
       countsAsClued(knowledge, other) &&
-      (note.every((c) => c.rank === (moment.stacks[c.suit] ?? 0) + 1) ||
-        note.every((c) => facts.isTrash(c, other)))
+      (note.every((c) => isPlayable(moment, c)) || note.every((c) => facts.isTrash(c, other)))
     );
   });
   return !busy;

@@ -1,5 +1,10 @@
 // Small generic helpers.
 
+/** Throws if `value` is falsy: for invariants the types can't express. */
+export function assert(value: unknown, message: string): asserts value {
+  if (!value) throw new Error(message);
+}
+
 /** `items` without repeats, keeping the first of each, where `same` says when two are the same. */
 export function uniqBy<T>(items: readonly T[], same: (a: T, b: T) => boolean = Object.is): T[] {
   return items.filter((item, i) => items.findIndex((other) => same(other, item)) === i);

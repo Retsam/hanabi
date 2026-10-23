@@ -405,18 +405,18 @@ function resolve(
   readings: readonly PastReading[],
   last: { turn: number; event: GameEvent },
 ): { table: Table; readings: readonly PastReading[] } {
-  return fixpoint(
-    { table, readings },
-    (state) => {
-      const settled = { ...state.table, common: settle(view, state.table, state.readings) };
-      const ruled = ruleOut(settled, state.readings, last);
-      return { table: { ...settled, ...narrow(settled, ruled) }, readings: ruled };
-    },
-    (a, b) =>
-      a.readings === b.readings &&
-      a.table.finessed.length === b.table.finessed.length &&
-      sameSizes(a.table.common, b.table.common),
-  );
+  type State = { table: Table; readings: readonly PastReading[] };
+  const deduce = (state: State): State => {
+    const settled = { ...state.table, common: settle(view, state.table, state.readings) };
+    const ruled = ruleOut(settled, state.readings, last);
+    return { table: { ...settled, ...narrow(settled, ruled) }, readings: ruled };
+  };
+  // Settling and narrowing only remove cards, so equal sizes mean nothing changed.
+  const unchanged = (a: State, b: State) =>
+    a.readings === b.readings &&
+    a.table.finessed.length === b.table.finessed.length &&
+    sameSizes(a.table.common, b.table.common);
+  return fixpoint({ table, readings }, deduce, unchanged);
 }
 
 /**
@@ -620,33 +620,31 @@ export function privateKnowledge(view: Sight, knowledge: Knowledge): Note[] {
   const rules = possibilities(view);
   const fallBack = (notes: Note[]) =>
     notes.map((note, id) => (note.length > 0 ? note : rules[id]!));
-  return fixpoint(
-    fallBack(goodTouched),
-    (known) => {
-      const could = (id: CardId, card: Card) => couldBe(known[id]!, card);
-      const notes = [...known];
-      for (const reading of readings) {
-        const live = pending(reading).filter(
-          (interpretation) =>
-            could(reading.focus, interpretation.focusIdentity) &&
-            interpretation.connections.every(
-              (connection) =>
-                hasPlayed(moment, connection.card) ||
-                connectingCards(knowledge, connection).some((id) => could(id, connection.card)),
-            ),
-        );
-        if (live.length === 0) continue;
-        narrowNote(
-          notes,
-          reading.focus,
-          live.map((interpretation) => interpretation.focusIdentity),
-        );
-        for (const [id, cards] of pinned(knowledge, live, could)) narrowNote(notes, id, cards);
-      }
-      return fallBack(possibilities(view, (id) => notes[id]!));
-    },
-    sameSizes,
-  );
+  /** Each pending clue narrowed to the interpretations that fit what the viewer knows. */
+  const applyReadings = (known: Note[]): Note[] => {
+    const could = (id: CardId, card: Card) => couldBe(known[id]!, card);
+    const notes = [...known];
+    for (const reading of readings) {
+      const live = pending(reading).filter(
+        (interpretation) =>
+          could(reading.focus, interpretation.focusIdentity) &&
+          interpretation.connections.every(
+            (connection) =>
+              hasPlayed(moment, connection.card) ||
+              connectingCards(knowledge, connection).some((id) => could(id, connection.card)),
+          ),
+      );
+      if (live.length === 0) continue;
+      narrowNote(
+        notes,
+        reading.focus,
+        live.map((interpretation) => interpretation.focusIdentity),
+      );
+      for (const [id, cards] of pinned(knowledge, live, could)) narrowNote(notes, id, cards);
+    }
+    return fallBack(possibilities(view, (id) => notes[id]!));
+  };
+  return fixpoint(fallBack(goodTouched), applyReadings, sameSizes);
 }
 
 export type TableFacts = ReturnType<typeof tableFacts>;

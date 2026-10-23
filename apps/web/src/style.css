@@ -1,0 +1,272 @@
+:root {
+  color-scheme: light dark;
+  --bg: #f4f1ea;
+  --panel: #fffdf8;
+  --text: #1f1d1a;
+  --muted: #6b665d;
+  --border: #d8d2c4;
+  --accent: #b5832a;
+  --red: #d64541;
+  --yellow: #e0b100;
+  --green: #2e9b4f;
+  --blue: #2f6fd6;
+  --purple: #8a4fbf;
+  --unknown: #8d8778;
+  font-family: system-ui, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1b1a18;
+    --panel: #262421;
+    --text: #ece8df;
+    --muted: #a39d90;
+    --border: #3d3a34;
+  }
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
+h2 {
+  margin: 0 0 6px;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.setup {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 320px;
+  margin: 64px auto;
+  padding: 0 16px;
+}
+
+.game {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 12px 16px;
+}
+
+.game header,
+.over {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.over {
+  padding: 8px 12px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+}
+
+.error {
+  color: var(--red);
+}
+
+.table {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 10px;
+}
+
+.table > :not(.discards, .log) {
+  grid-column: 1;
+}
+
+.discards {
+  grid-column: 2;
+  grid-row: 1 / span 3;
+}
+
+.log {
+  grid-column: 2;
+  grid-row: 4 / span 4;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.log ol {
+  margin: 0;
+  padding-left: 28px;
+  font-size: 0.85rem;
+}
+
+@media (max-width: 720px) {
+  .table {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .table > *,
+  .discards,
+  .log {
+    grid-column: 1;
+    grid-row: auto;
+  }
+}
+
+.status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.seat,
+.discards,
+.log {
+  padding: 8px 10px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.seat.current {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.hand,
+.stacks {
+  display: flex;
+  gap: 8px;
+}
+
+.slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.card {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 72px;
+  border-radius: 6px;
+  border: 3px solid transparent;
+  background: var(--suit);
+  color: white;
+  font-size: 1.6rem;
+  font-weight: 700;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.5);
+}
+
+.card.hidden {
+  background: color-mix(in srgb, var(--suit) 35%, var(--panel));
+  border-style: dashed;
+  border-color: var(--border);
+}
+
+.card.clued {
+  border-style: solid;
+  border-color: var(--accent);
+}
+
+.card.highlight {
+  outline: 3px solid var(--text);
+  outline-offset: 2px;
+}
+
+.stack.empty {
+  opacity: 0.3;
+}
+
+.pips {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 0.7rem;
+  color: var(--muted);
+  min-height: 2em;
+}
+
+.pip {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin: 0 1px;
+  border-radius: 50%;
+  background: var(--suit);
+}
+
+.card-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.card-actions button {
+  font-size: 0.75rem;
+}
+
+.clues {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.clue {
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--suit, var(--panel));
+  color: var(--text);
+}
+
+.discard-row {
+  display: flex;
+  gap: 3px;
+  min-height: 22px;
+  margin-bottom: 3px;
+}
+
+.mini {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 22px;
+  border-radius: 3px;
+  background: var(--suit);
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.suit-red {
+  --suit: var(--red);
+}
+.suit-yellow {
+  --suit: var(--yellow);
+}
+.suit-green {
+  --suit: var(--green);
+}
+.suit-blue {
+  --suit: var(--blue);
+}
+.suit-purple {
+  --suit: var(--purple);
+}
+.suit-unknown {
+  --suit: var(--unknown);
+}

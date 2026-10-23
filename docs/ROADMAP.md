@@ -39,9 +39,10 @@ The simulator can run self-play games and report scores, but nothing gates on th
 
 ## Phase 3: Web UI for play
 
-- `apps/web`: one human seat plus AI seats.
-- Renders the human's `PlayerView` and animates events.
-- AI selection per seat.
+- `apps/web` (Vite + React): one human seat plus H-Group AI seats, dealt from a seed. Done.
+- Renders the human's `PlayerView`, with each card's clue possibilities. Done.
+- Animating events, and AI selection per seat once there is more than one AI.
+- A post-game review of the game just played, from `reviewGame`. It starts Phase 4.
 
 ## Phase 4: Replay viewer
 

@@ -22,3 +22,4 @@ jobs:
       - run: pnpm test
         env:
           PROPERTY_GAMES: 2000
+      - run: pnpm --filter @hanabi/web build

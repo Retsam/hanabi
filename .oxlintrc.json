@@ -1,12 +1,14 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["typescript", "unicorn", "import", "vitest"],
+  "plugins": ["typescript", "unicorn", "import", "vitest", "react"],
   "categories": {
     "correctness": "error",
     "suspicious": "warn"
   },
   "ignorePatterns": ["node_modules", "dist", "coverage"],
   "rules": {
+    "react/react-in-jsx-scope": "off",
+    "import/no-unassigned-import": ["warn", { "allow": ["**/*.css"] }],
     "typescript/no-unnecessary-condition": "error",
     "typescript/no-floating-promises": "error",
     "vitest/expect-expect": ["error", { "assertFunctionNames": ["expect", "expectForAllGames"] }]

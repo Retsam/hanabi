@@ -149,7 +149,8 @@ function judgement(view: PlayerView, knowledge: Knowledge) {
           interpretation.connections.some(
             (connection) =>
               connection.seat === me &&
-              !hasPlayed(moment, connection.card) &&
+              // A prompt can wait on a clued card the table knows will play first.
+              playableNow(connection.card) &&
               connectingCards(knowledge, connection).find((each) =>
                 mine[each]!.some((card) => sameCard(card, connection.card)),
               ) === id,

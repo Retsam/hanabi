@@ -80,6 +80,33 @@ describe("plays", () => {
     );
   });
 
+  it("wait for the known card under a prompted card to play first", () => {
+    // Bob's known r1 plays first, so Alice's red clue on Cathy's r3 prompts his other red card as
+    // the r2. It isn't playable until the r1 is.
+    const prompt = deal({
+      hands: [
+        ["y3", "g3", "b3", "p3", "y4"],
+        ["g4", "b4", "r*2", "p4", "r*1*"],
+        ["g5", "r3", "b5", "p5", "y5"],
+      ],
+      clueTokens: 6,
+    }).clue(CATHY, "red");
+    const moves = ranked(prompt).filter((move) => move.action.type === "play");
+    expect(moves[0]).toMatchObject({
+      action: { cardId: prompt.cardAt(4, BOB) },
+      category: "permitted",
+    });
+    expect(judged(prompt, { type: "play", cardId: prompt.cardAt(2, BOB) }).category).toBe(
+      "violates",
+    );
+    // Once the r1 has played, the prompt is owed.
+    const next = prompt.play(4).discard(4).discard(4);
+    expect(ranked(next)[0]).toMatchObject({
+      action: { type: "play", cardId: prompt.cardAt(2, BOB) },
+      category: "mandated",
+    });
+  });
+
   // beginner/prompt, fourth example: Bob's three 3s play left to right until the r3 turns up.
   it("move on to the next candidate when the leftmost was another card", () => {
     const game = deal({

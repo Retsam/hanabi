@@ -7,6 +7,13 @@ import { describeAction, describeEvent, seatName } from "./describe.ts";
 import { type ReviewedTurn, reviewTurns } from "./review.ts";
 import { Table } from "./Table.tsx";
 
+/**
+ * Whose eyes the table is shown through: the player who made the move, the player after them, or
+ * everyone's cards face up.
+ */
+type Pov = "mover" | "next" | "all";
+const POVS: readonly Pov[] = ["mover", "next", "all"];
+
 const CATEGORY: Record<Category, string> = {
   mandated: "Mandated",
   permitted: "Permitted",
@@ -17,7 +24,7 @@ export function Review(props: { replay: Replay; level: Level; you: Seat }) {
   const { you } = props;
   const [turns, setTurns] = useState<ReviewedTurn[] | null>(null);
   const [index, setIndex] = useState(0);
-  const [showAll, setShowAll] = useState(false);
+  const [pov, setPov] = useState<Pov>("mover");
 
   useEffect(() => {
     // Let "Reviewing…" paint before the engine blocks the page.
@@ -39,8 +46,19 @@ export function Review(props: { replay: Replay; level: Level; you: Seat }) {
   if (turn === undefined) return <p>No moves to review.</p>;
   const { review, state, event, moment } = turn;
   const actorView = playerView(state, review.seat);
-  // Hindsight: every card face up, as the review's judgement never is.
-  const view: PlayerView = showAll ? { ...actorView, cards: state.cards } : actorView;
+  const next = (review.seat + 1) % state.config.numPlayers;
+  const view: PlayerView =
+    pov === "mover"
+      ? actorView
+      : pov === "next"
+        ? playerView(state, next)
+        : // Hindsight: every card face up, as the review's judgement never is.
+          { ...actorView, cards: state.cards };
+  const povLabels: Record<Pov, string> = {
+    mover: `Mover (${seatName(you, review.seat)})`,
+    next: `Next (${seatName(you, next)})`,
+    all: "All cards",
+  };
   const used = new Set<CardId>(event.type === "clue" ? event.touched : [event.cardId]);
 
   return (
@@ -55,14 +73,19 @@ export function Review(props: { replay: Replay; level: Level; you: Seat }) {
         <button disabled={index === turns.length - 1} onClick={() => setIndex(index + 1)}>
           Next ▶
         </button>
-        <label>
-          <input
-            type="checkbox"
-            checked={showAll}
-            onChange={(change) => setShowAll(change.target.checked)}
-          />{" "}
-          Show all cards
-        </label>
+        <div className="pov" role="radiogroup" aria-label="Point of view">
+          {POVS.map((each) => (
+            <button
+              key={each}
+              role="radio"
+              aria-checked={pov === each}
+              className={pov === each ? "selected" : ""}
+              onClick={() => setPov(each)}
+            >
+              {povLabels[each]}
+            </button>
+          ))}
+        </div>
       </div>
       <div className="review-body">
         <div>

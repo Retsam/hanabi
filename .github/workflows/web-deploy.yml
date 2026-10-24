@@ -1,0 +1,32 @@
+name: Web deploy
+
+# Publishes main's web UI to the root of gh-pages
+# (https://retsam.github.io/hanabi/), leaving PR previews in pr-preview/ alone.
+
+on:
+  push:
+    branches: [main]
+
+concurrency: web-deploy
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @hanabi/web build
+      - uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: apps/web/dist
+          branch: gh-pages
+          clean-exclude: pr-preview/
+          force: false

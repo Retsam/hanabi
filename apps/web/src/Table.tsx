@@ -1,6 +1,7 @@
-// The play screen: everything the viewer's seat can see, and the moves it can make on its turn.
+// The table as one seat sees it, with the human's moves on their turn. The review reuses it read-only.
 import {
   type Action,
+  type CardId,
   type Clue,
   type GameEvent,
   history,
@@ -15,41 +16,58 @@ import { useState } from "react";
 import { HandCard } from "./Card.tsx";
 import { clueName, describeEvent, seatName } from "./describe.ts";
 
-export function Table(props: { view: PlayerView; onAct: (action: Action) => void }) {
-  const { view, onAct } = props;
+export function Table(props: {
+  view: PlayerView;
+  /** The human's seat, shown at the bottom as "You". Defaults to the view's seat. */
+  you?: Seat;
+  /** Makes the human's moves. Without it the table is read-only. */
+  onAct?: (action: Action) => void;
+  /** Cards to mark, such as the ones a reviewed move used. */
+  highlight?: ReadonlySet<CardId>;
+}) {
+  const { view, you = view.seat, onAct, highlight } = props;
   const [considering, setConsidering] = useState<{ target: Seat; clue: Clue } | null>(null);
-  const myTurn = view.currentPlayer === view.seat && view.status !== "over";
-  const others = Array.from(
-    { length: view.config.numPlayers - 1 },
-    (_, i) => (view.seat + 1 + i) % view.config.numPlayers,
+  const live = view.status !== "over";
+  const myTurn = onAct !== undefined && live && view.currentPlayer === you;
+  const seats = Array.from(
+    { length: view.config.numPlayers },
+    (_, i) => (you + 1 + i) % view.config.numPlayers,
   );
+  const marked = (seat: Seat, id: CardId) =>
+    highlight?.has(id) === true ||
+    (considering?.target === seat && clueMatches(view.cards[id]!.card!, considering.clue));
 
   return (
     <div className="table">
       <Status view={view} />
       <Stacks view={view} />
-      {others.map((seat) => (
+      {seats.map((seat) => (
         <section
           key={seat}
-          className={
-            seat === view.currentPlayer && view.status !== "over" ? "seat current" : "seat"
-          }
+          className={seat === view.currentPlayer && live ? "seat current" : "seat"}
         >
-          <h2>{seatName(view, seat)}</h2>
+          <h2>
+            {seat === you ? "Your hand" : seatName(you, seat)}
+            {myTurn && seat === you && ": your turn"}
+          </h2>
           <div className="hand">
             {view.hands[seat]!.map((id) => (
-              <HandCard
-                key={id}
-                view={view}
-                id={id}
-                highlight={
-                  considering?.target === seat &&
-                  clueMatches(view.cards[id]!.card!, considering.clue)
-                }
-              />
+              <HandCard key={id} view={view} id={id} highlight={marked(seat, id)}>
+                {myTurn && seat === you && (
+                  <div className="card-actions">
+                    <button onClick={() => onAct({ type: "play", cardId: id })}>Play</button>
+                    <button
+                      disabled={view.clueTokens >= view.config.maxClueTokens}
+                      onClick={() => onAct({ type: "discard", cardId: id })}
+                    >
+                      Discard
+                    </button>
+                  </div>
+                )}
+              </HandCard>
             ))}
           </div>
-          {myTurn && (
+          {myTurn && seat !== you && (
             <ClueButtons
               view={view}
               target={seat}
@@ -62,28 +80,8 @@ export function Table(props: { view: PlayerView; onAct: (action: Action) => void
           )}
         </section>
       ))}
-      <section className={myTurn ? "seat current" : "seat"}>
-        <h2>Your hand{myTurn && ": your turn"}</h2>
-        <div className="hand">
-          {view.hands[view.seat]!.map((id) => (
-            <HandCard key={id} view={view} id={id}>
-              {myTurn && (
-                <div className="card-actions">
-                  <button onClick={() => onAct({ type: "play", cardId: id })}>Play</button>
-                  <button
-                    disabled={view.clueTokens >= view.config.maxClueTokens}
-                    onClick={() => onAct({ type: "discard", cardId: id })}
-                  >
-                    Discard
-                  </button>
-                </div>
-              )}
-            </HandCard>
-          ))}
-        </div>
-      </section>
       <Discards view={view} />
-      <Log view={view} />
+      <Log view={view} you={you} />
     </div>
   );
 }
@@ -179,9 +177,9 @@ function Discards({ view }: { view: PlayerView }) {
   );
 }
 
-function Log({ view }: { view: PlayerView }) {
+function Log({ view, you }: { view: PlayerView; you: Seat }) {
   const moments = history(view);
-  const lines = view.log.map((event: GameEvent, i) => describeEvent(view, event, moments[i]!));
+  const lines = view.log.map((event: GameEvent, i) => describeEvent(you, event, moments[i]!));
   return (
     <section className="log">
       <h2>Log</h2>

@@ -7,6 +7,7 @@ import {
   type Snapshot,
   startSession,
 } from "./session.ts";
+import { Review } from "./Review.tsx";
 import { Table } from "./Table.tsx";
 
 const PLAYER_COUNTS: readonly PlayerCount[] = [2, 3, 4, 5];
@@ -61,6 +62,7 @@ function Setup({ onStart }: { onStart: (options: SessionOptions) => void }) {
 function Game({ options, onLeave }: { options: SessionOptions; onLeave: () => void }) {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reviewing, setReviewing] = useState(false);
   const session = useRef<Session | null>(null);
 
   useEffect(() => {
@@ -85,12 +87,21 @@ function Game({ options, onLeave }: { options: SessionOptions; onLeave: () => vo
           <strong>
             Game over: {score(view)}/{maxScore(view.config)}
           </strong>
-          <button onClick={() => void navigator.clipboard.writeText(JSON.stringify(replay))}>
-            Copy replay
-          </button>
+          <span className="buttons">
+            <button onClick={() => setReviewing(!reviewing)}>
+              {reviewing ? "Back to the table" : "Review game"}
+            </button>
+            <button onClick={() => void navigator.clipboard.writeText(JSON.stringify(replay))}>
+              Copy replay
+            </button>
+          </span>
         </div>
       )}
-      <Table view={view} onAct={(action) => setError(session.current?.submit(action) ?? null)} />
+      {replay !== null && reviewing ? (
+        <Review replay={replay} level={options.level} you={options.humanSeat} />
+      ) : (
+        <Table view={view} onAct={(action) => setError(session.current?.submit(action) ?? null)} />
+      )}
     </div>
   );
 }

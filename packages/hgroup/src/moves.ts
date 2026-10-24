@@ -483,13 +483,14 @@ const uniqueNames = (interpretations: readonly Interpretation[]) =>
 const SAVES: readonly ConventionId[] = ["5-save", "2-save", "critical-save"];
 
 /**
- * The convention a clue read as `interpretation` is an example of: its prompt or finesse, its kind
+ * The convention a clue read as `interpretation` is an example of: its prompt(s) or finesse, its kind
  * of save, or a (delayed) play clue.
  */
 function mainConvention(interpretation: Interpretation): ConventionId {
+  const { conventions } = interpretation;
+  if (conventions.includes("multi-prompt")) return "multi-prompt";
   const [connection] = interpretation.connections;
   if (connection !== undefined) return connection.kind;
-  const { conventions } = interpretation;
   if (interpretation.kind === "save") {
     return conventions.find((id) => SAVES.includes(id)) ?? "save-clue";
   }

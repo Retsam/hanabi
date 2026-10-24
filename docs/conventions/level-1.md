@@ -11,7 +11,7 @@ finesses) and `moves.test.ts` (move ranking), mostly built from the site's own e
 
 `readClue` reads one clue from the table as it was just before the clue. Every reading has a focus and a
 list of interpretations: what the focus is under each one, whether it is a play or a save, and any
-connecting card that has to play first (a prompt or a finesse). `focusCards` collects the focus cards
+connecting cards that have to play first (prompts, finesses and cards that play anyway). `focusCards` collects the focus cards
 of the interpretations not yet ruled out, and the focus's common knowledge becomes that set. When
 there are none the clue is off-convention: it means nothing at the table's level and only its
 rules-level information is kept.
@@ -58,8 +58,8 @@ If every interpretation is ruled out, a teammate broke a convention: the cards k
   [beginner/delayed-play-clues](https://hanabi.github.io/beginner/delayed-play-clues),
   [level 1](https://hanabi.github.io/level-1#the-definition-of-playable).
 - **Reading:** a play clue says the focus is the next card its suit needs once every clued card the
-  table has identified has played, or one card past that if a prompt or finesse supplies the card in
-  between (see below). The focus is whichever of those the clue could touch.
+  table has identified has played, or any card past that if connecting cards supply every card in
+  between, in rank order (see below and `prompt`). The focus is whichever of those the clue could touch.
 - **Rules out:** everything else the clue could touch.
 - **Tempo clues:** a clue that touches nothing new is a play clue on its focus (the leftmost re-touched
   card), as in the site's tempo clue example.
@@ -68,6 +68,10 @@ If every interpretation is ruled out, a teammate broke a convention: the cards k
   site doesn't call that a prompt, since the card was going to play anyway, so the reading lists it as
   `delayed-play-clue`. Only players who can see those 1's can tell which suits they cover, so the table
   reads Bob's 2 as any 2 those 1's could lead to.
+- **No limit on cards that play anyway:** the site sets no limit on how many such cards a delayed play
+  clue can wait on, so a clue can connect through any number of them, alongside its one prompt or
+  finesse. Each card is checked against the suit as it will be once the cards before it have played:
+  a clued 3 that could only be the b3 or a playable card plays anyway once the b2 before it has.
 
 ## `save-clue`
 
@@ -128,7 +132,10 @@ If every interpretation is ruled out, a teammate broke a convention: the cards k
   second and fourth examples): the prompt promises the card, and its giver answers for the cards before it.
 - **Judgment call:** a prompted player who passes their turn does not rule the prompt out. The site only
   calls finesses urgent.
-- **Limit:** one prompt or finesse per clue. Double prompts and a prompt plus a finesse are level 2.
+- **Limit:** one prompt or finesse per clue, on top of any cards that play anyway. A clue that needs two
+  prompts is a Double Prompt (`multi-prompt`, level 2, see [level-2.md](./level-2.md)); double
+  finesses and a prompt plus a finesse are level 2 as well and not implemented yet. A prompt chained
+  after other connections lists only the clued cards the earlier ones haven't already prompted.
 
 ## `finesse`
 

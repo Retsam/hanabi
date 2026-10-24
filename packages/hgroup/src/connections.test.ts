@@ -2,7 +2,9 @@
 // examples. See docs/conventions/level-1.md.
 import { deal } from "@hanabi/engine/testing";
 import { describe, expect, it } from "vitest";
-import { finessePosition } from "./knowledge.ts";
+import { playerView } from "@hanabi/engine";
+import { finessePosition, privateKnowledge } from "./knowledge.ts";
+import { rankMoves } from "./moves.ts";
 import { common, lastReading, names, own, read } from "./testing/knowledge.ts";
 
 const ALICE = 0;
@@ -222,5 +224,87 @@ describe("finesses", () => {
       stacks: { red: 2, yellow: 2, green: 2, blue: 2, purple: 2 },
     }).clue(BOB, "red");
     expect(lastReading(game, ALICE).play).toEqual(["r3"]);
+  });
+});
+
+describe("chains of connections", () => {
+  // beginner/delayed-play-clues: a play clue can wait on any number of cards that play anyway.
+  // Here Bob's 2 plays anyway (every 2 is playable), so it costs nothing and his 3 can still be
+  // prompted.
+  it("can pass through cards that play anyway before a prompt at level 1", () => {
+    const game = deal({
+      hands: [
+        ["y3", "g3", "p3", "r4", "y4"],
+        ["b2*", "b3*", "g4", "p4", "y5"],
+        ["g5", "b4", "r5", "p5", "g4"],
+      ],
+      stacks: { red: 1, yellow: 1, green: 1, blue: 1, purple: 1 },
+    }).clue(CATHY, "blue");
+    const reading = lastReading(game, ALICE);
+    expect(reading.play).toEqual(["b2", "b3", "b4"]);
+    const b4 = reading.interpretations.find(({ focusIdentity }) => focusIdentity.rank === 4)!;
+    expect(b4.connections.map(({ seat, card }) => [seat, names([card])[0]])).toEqual([
+      [BOB, "b2"],
+      [BOB, "b3"],
+    ]);
+    expect(b4.conventions).toEqual(expect.arrayContaining(["delayed-play-clue", "prompt"]));
+    expect(b4.conventions).not.toContain("multi-prompt");
+  });
+
+  // level-2#the-double-prompt: Cathy's y5 needs both of Bob's unidentified yellow cards, the
+  // position Retsam asked about (game-delayed-y5, turn 19).
+  const doublePrompt = deal({
+    hands: [
+      ["r3", "b3", "p3", "r4", "b4"],
+      ["b5", "y*3", "y*4", "p4", "r5"],
+      ["b1", "y5", "p2", "r1", "p4"],
+    ],
+    stacks: { red: 2, yellow: 2, green: 4, blue: 2, purple: 2 },
+    clueTokens: 6,
+  }).clue(CATHY, 5);
+  const cathysFive = doublePrompt.cardAt(1, CATHY);
+
+  it("needs Double Prompts (level 2) to read a clue through two prompts", () => {
+    expect(
+      names(read(doublePrompt, ALICE, 1).readings[0]!.interpretations.map((i) => i.focusIdentity)),
+    ).toEqual(["g5"]);
+    const reading = read(doublePrompt, ALICE, 2).readings[0]!;
+    const [yellow] = reading.interpretations;
+    expect(names([yellow!.focusIdentity])).toEqual(["y5"]);
+    expect(yellow!.conventions).toEqual(expect.arrayContaining(["prompt", "multi-prompt"]));
+    expect(yellow!.connections).toEqual([
+      {
+        kind: "prompt",
+        seat: BOB,
+        card: { suit: "yellow", rank: 3 },
+        ids: [doublePrompt.cardAt(1, BOB), doublePrompt.cardAt(2, BOB)],
+      },
+      {
+        kind: "prompt",
+        seat: BOB,
+        card: { suit: "yellow", rank: 4 },
+        ids: [doublePrompt.cardAt(2, BOB)],
+      },
+    ]);
+    expect(names(reading.interpretations.map((i) => i.focusIdentity))).toEqual(["y5", "g5"]);
+  });
+
+  it("tell the prompted player to play their cards left to right", () => {
+    const view = playerView(doublePrompt.state, BOB);
+    const bob = privateKnowledge(view, read(doublePrompt, BOB, 2));
+    // Bob sees Cathy's y5, so his yellow cards are the y3 and then the y4.
+    expect(names(bob[doublePrompt.cardAt(1, BOB)]!)).toEqual(["y3"]);
+    expect(names(bob[doublePrompt.cardAt(2, BOB)]!)).toEqual(["y4"]);
+    expect(rankMoves(view, 2)[0]).toMatchObject({
+      action: { type: "play", cardId: doublePrompt.cardAt(1, BOB) },
+      category: "mandated",
+    });
+    expect(names(read(doublePrompt, CATHY, 2).common[cathysFive]!)).toEqual(["y5", "g5"]);
+    // Once the y3 has played, the y4 is owed next.
+    const later = doublePrompt.play(1).discard(4).discard(4);
+    expect(rankMoves(playerView(later.state, BOB), 2)[0]).toMatchObject({
+      action: { type: "play", cardId: doublePrompt.cardAt(2, BOB) },
+      category: "mandated",
+    });
   });
 });

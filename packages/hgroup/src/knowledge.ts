@@ -354,42 +354,96 @@ function directPlay(read: ClueOnTable, next: Card): Interpretation[] {
   return [readAs("play", next, ["play-clue", "delayed-play-clue"])];
 }
 
-/** A play clue on the card after `next`, with a prompt or finesse supplying `next`. */
-function connectedPlay(read: ClueOnTable, next: Card): Interpretation[] {
-  const rank = RANKS.find((each) => each === next.rank + 1);
-  if (rank === undefined) return [];
-  const card = { suit: next.suit, rank };
-  if (!couldBe(read.candidates, card) || read.facts.isTrash(card, read.focus)) return [];
-  return connectionsFor(read, next).map(({ connection, conventions }) =>
-    readAs("play", card, ["play-clue", ...conventions], [connection]),
-  );
+/** The connections that supply a suit's cards from the one it needs next, in rank order. */
+interface Chain {
+  readonly connections: readonly Connection[];
+  readonly conventions: readonly ConventionId[];
+  /** How many of the connections are prompts, not cards that play anyway. */
+  readonly prompts: number;
 }
 
 /**
- * The ways `card` could be supplied so that a play clue on the card after it makes sense, in turn
- * order from the clue giver. Level 1 allows one such card per clue:
+ * Play clues on the cards past `next`, each with a chain of connections supplying every card from
+ * `next` up to it. A chain grows one card at a time, while the clue may still ask for it (`allows`).
+ */
+function connectedPlay(
+  read: ClueOnTable,
+  next: Card,
+  chain: Chain = { connections: [], conventions: [], prompts: 0 },
+): Interpretation[] {
+  const rank = RANKS.find((each) => each === next.rank + 1);
+  if (rank === undefined) return [];
+  const card = { suit: next.suit, rank };
+  return connectionsFor(read, next, chain).flatMap(({ connection, conventions }) => {
+    const longer: Chain = {
+      connections: [...chain.connections, connection],
+      conventions: uniqBy([...chain.conventions, ...conventions]),
+      prompts: chain.prompts + (conventions.includes("prompt") ? 1 : 0),
+    };
+    const multiPrompt = longer.prompts > 1 ? ["multi-prompt" as const] : [];
+    if (!allows(read, longer)) return [];
+    // Trash can't be the focus, but a chain can pass through it: a clued card the table already
+    // knows is the card plays anyway.
+    const here =
+      couldBe(read.candidates, card) && !read.facts.isTrash(card, read.focus)
+        ? [
+            readAs(
+              "play",
+              card,
+              ["play-clue", ...longer.conventions, ...multiPrompt],
+              [...longer.connections],
+            ),
+          ]
+        : [];
+    return [...here, ...connectedPlay(read, card, longer)];
+  });
+}
+
+/**
+ * Whether a clue can ask for `chain`: any number of cards that play anyway (`delayed-play-clue`),
+ * plus one prompt or one finesse. With `multi-prompt`, any number of prompts and no finesse.
+ */
+function allows({ uses }: ClueOnTable, { connections, prompts }: Chain): boolean {
+  const finesses = connections.filter(({ kind }) => kind === "finesse").length;
+  if (finesses + prompts <= 1) return true;
+  return finesses === 0 && uses("multi-prompt");
+}
+
+/**
+ * The ways `card` could be supplied, once `chain` has supplied the cards before it, so that a play
+ * clue past it makes sense. In turn order from the clue giver:
  *
  * - A prompt: any seat but the giver's (the receiver's included) has clued cards that could be
- *   `card`. If those cards were going to play anyway it is a delayed play clue, not a prompt.
+ *   `card`, other than the ones `chain` already prompts. If those cards were going to play anyway
+ *   it is a delayed play clue, not a prompt.
  * - A finesse: a seat that plays after the giver and before the receiver has no such clued card
  *   (`prompts-before-finesses`), and `card` is playable now, so their finesse position blind-plays.
+ *   Only the first card of a chain can be playable now, so a clue finesses one card at most.
  */
 function connectionsFor(
   read: ClueOnTable,
   card: Card,
+  chain: Chain,
 ): { connection: Connection; conventions: ConventionId[] }[] {
   const { table, given, focus, facts, uses } = read;
   const { moment, common } = table;
   const seats = seatsAfter(given.giver, read.view.config.numPlayers);
+  const prompted = new Set(
+    chain.connections.flatMap(({ kind, ids }) => (kind === "prompt" ? [ids[0]!] : [])),
+  );
+  // Once the chain has played, `card` is the card its suit needs next.
+  const isNext = (other: Card) =>
+    other.suit === card.suit ? other.rank === card.rank : facts.isNext(other);
   const result: { connection: Connection; conventions: ConventionId[] }[] = [];
 
   for (const seat of seats) {
     const beforeReceiver = seats.indexOf(seat) < seats.indexOf(given.target);
     const ids = moment.hands[seat]!.filter(
-      (id) => id !== focus && isClued(moment, id) && couldBe(common[id]!, card),
+      (id) =>
+        id !== focus && !prompted.has(id) && isClued(moment, id) && couldBe(common[id]!, card),
     );
     if (ids.length > 0) {
-      const anyway = ids.every((id) => common[id]!.every((other) => facts.isNext(other)));
+      const anyway = ids.every((id) => common[id]!.every(isNext));
       const kind = anyway ? "delayed-play-clue" : "prompt";
       if (!uses(kind)) continue;
       const conventions: ConventionId[] = [kind];

@@ -27,6 +27,7 @@ export const CONVENTION_LEVELS = {
   "save-principle": 1,
   "minimum-clue-value": 1,
   "early-game": 1,
+  "multi-prompt": 2,
 } as const satisfies Record<string, Level>;
 
 export type ConventionId = keyof typeof CONVENTION_LEVELS;

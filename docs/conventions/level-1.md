@@ -214,7 +214,9 @@ category, then score, then a fixed order: plays, discards, then clues by seat an
 - **Rule:** the team never lets a 5, a unique 2 (no other copy visible), a critical card or a unique
   playable card be discarded. It overrides every other rule, Good Touch included.
 - **Ranking:** a clue that saves such a card from the next player's chop is mandated when they have
-  nothing better to do: no clued card the table knows is playable, and no known trash. A save that
+  nothing better to do: no clued card the table knows is playable, no known trash, and no prompt or
+  finesse they know they owe (level 1's chop is the card they would discard "if they had nothing else
+  to do"). A save that
   breaks Good Touch is still permitted (or mandated), but scores lower for each trash card it touches.
   The site's example has both blue and 3 breaking Good Touch to save the last blue 3, and blue scores
   higher because one of the blue 4's it touches is useful.
@@ -224,6 +226,13 @@ category, then score, then a fixed order: plays, discards, then clues by seat an
   keeps y2 as a possibility for their own clued 2. Cards the giver could see are still ruled out: they
   would have made the saved card not unique. So is a card in the giver's hand clued after the save,
   since its cluer could see the saved card.
+- **Play Clues Over Save Clues:** [beginner/other-general-strategy](https://hanabi.github.io/beginner/other-general-strategy)
+  says "There's no need to save a card now if you can preoccupy the player with playing a card!" So
+  when the next player's chop needs saving, a clue that leaves them a card to play now (a play clue
+  to them, or a finesse or prompt on them through someone else's card) is mandated too, and scores
+  above the save. A delayed play clue doesn't count: it gives them nothing to play yet.
+- **Judgment call:** a reading that needs the viewer to play is ignored when deciding what the next
+  player owes. The viewer isn't playing this turn, so it is ruled out before the next player moves.
 - **Judgment call:** only the next player's chop is urgent. A card on a later player's chop can be
   saved by someone else before that player discards.
 

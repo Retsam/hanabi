@@ -136,6 +136,8 @@ interface Judge {
   readonly seen: (id: CardId) => Card | null;
   /** Trash to the table, or a copy of a clued card the viewer sees, which Good Touch says will play. */
   readonly isTrash: (card: Card, self: CardId) => boolean;
+  /** The card on the next player's chop that must be saved this turn, if any (`urgentSave`). */
+  readonly urgent: CardId | null;
 }
 
 function judgeFor(view: PlayerView, knowledge: Knowledge): Judge {
@@ -152,7 +154,8 @@ function judgeFor(view: PlayerView, knowledge: Knowledge): Judge {
     (uses("good-touch") &&
       visibleClued.some((other) => other.id !== self && sameCard(other.card, card)));
   const mine = privateKnowledge(view, knowledge);
-  return { view, knowledge, facts, mine, uses, seen, isTrash };
+  const judge = { view, knowledge, facts, mine, uses, seen, isTrash };
+  return { ...judge, urgent: urgentSave(judge) };
 }
 
 const move = (
@@ -256,6 +259,8 @@ interface ClueCase extends Given {
   readonly bad: readonly CardId[];
   /** Newly touched cards the clue gets played or saved. */
   readonly gotten: readonly CardId[];
+  /** What the table knows once the clue is given. */
+  readonly after: Knowledge;
 }
 
 /** What a check finds: a convention the clue breaks, or a change to its score. */
@@ -273,6 +278,7 @@ const CLUE_CHECKS: readonly ((judge: Judge, clue: ClueCase) => Finding | undefin
   copiesOwnClued,
   badTouch,
   savePrinciple,
+  playOverSave,
 ];
 
 function judgeClue(judge: Judge, given: Given): RankedMove {
@@ -304,7 +310,7 @@ function judgeClue(judge: Judge, given: Given): RankedMove {
     ]);
   }
 
-  const clue = describeClue(judge, given, reading.focus, real);
+  const clue = describeClue(judge, given, after, reading.focus, real);
   const reasons = [
     reason(
       mainConvention(clue.primary),
@@ -332,6 +338,7 @@ const isSave = (interpretation: Interpretation) => interpretation.kind === "save
 function describeClue(
   judge: Judge,
   given: Given,
+  after: Knowledge,
   focus: CardId,
   real: readonly Interpretation[],
 ): ClueCase {
@@ -352,6 +359,7 @@ function describeClue(
     saving: real.some(isSave),
     bad,
     gotten: newlyTouched.filter((id) => !bad.includes(id)),
+    after,
   };
 }
 
@@ -431,9 +439,22 @@ function badTouch(judge: Judge, clue: ClueCase): Finding | undefined {
 
 /** The Save Principle: a card about to be discarded from the next player's chop must be saved. */
 function savePrinciple(judge: Judge, clue: ClueCase): Finding | undefined {
-  if (!isUrgentSave(judge, clue.target, clue.focus)) return undefined;
+  if (clue.target !== nextSeat(judge.view) || clue.focus !== judge.urgent) return undefined;
   const text = `The next player would discard the ${name(clue.focusCard)} from chop: it must be saved.`;
   return { score: 30, mandated: true, reason: reason("save-principle", [clue.focus], text) };
+}
+
+/**
+ * Give Play Clues Over Save Clues (beginner/other-general-strategy): a clue that leaves the next
+ * player a card to play keeps them from discarding the card on their chop, so it does the save's job
+ * this turn. It scores above the save itself.
+ */
+function playOverSave(judge: Judge, clue: ClueCase): Finding | undefined {
+  const id = judge.urgent;
+  if (id === null || clue.touched.includes(id)) return undefined;
+  if (!isBusy(judge, clue.after, nextSeat(judge.view))) return undefined;
+  const text = `The next player will play instead of discarding the ${name(judge.seen(id)!)}: no need to save it yet.`;
+  return { score: 35, mandated: true, reason: reason("save-principle", [id], text) };
 }
 
 /**
@@ -481,31 +502,42 @@ function mainConvention(interpretation: Interpretation): ConventionId {
  * anything the viewer thinks they could be.
  */
 function receiverKeeps(judge: Judge, after: Knowledge, receiver: Seat): Interpretation[] {
-  const { view, mine } = judge;
   const reading = after.readings.at(-1)!;
-  const theirs = new Set(after.moment.hands[receiver]);
-  const ours = new Set(after.moment.hands[view.seat]);
-  const cards = view.cards.map((card) => (theirs.has(card.id) ? { ...card, card: null } : card));
-  const common = after.common.map((note, id) =>
-    ours.has(id) ? narrowed(note, (card) => couldBe(mine[id]!, card)) : note,
-  );
-  const known = privateKnowledge({ config: view.config, cards }, { ...after, common });
+  const known = seatKnows(judge, after, receiver);
   return pending(reading).filter((interpretation) =>
     couldBe(known[reading.focus]!, interpretation.focusIdentity),
   );
 }
 
 /**
- * Whether `id` is a card the Save Principle protects on the next player's chop, with nothing else
- * for them to do first: no card the table knows is playable and no known trash to discard.
+ * What `seat` knows about each card, as far as the viewer can tell: they see every card the viewer
+ * sees except their own hand, and the viewer's cards count as anything the viewer thinks they
+ * could be.
  */
-function isUrgentSave(judge: Judge, target: Seat, id: CardId): boolean {
+function seatKnows(judge: Pick<Judge, "view" | "mine">, knowledge: Knowledge, seat: Seat): Note[] {
+  const { view, mine } = judge;
+  const theirs = new Set(knowledge.moment.hands[seat]);
+  const ours = new Set(knowledge.moment.hands[view.seat]);
+  const cards = view.cards.map((card) => (theirs.has(card.id) ? { ...card, card: null } : card));
+  const common = knowledge.common.map((note, id) =>
+    ours.has(id) ? narrowed(note, (card) => couldBe(mine[id]!, card)) : note,
+  );
+  return privateKnowledge({ config: view.config, cards }, { ...knowledge, common });
+}
+
+const nextSeat = (view: PlayerView): Seat => (view.seat + 1) % view.config.numPlayers;
+
+/**
+ * The card on the next player's chop that the Save Principle protects, if they have nothing else to
+ * do first (see `isBusy`). Null if there is none.
+ */
+function urgentSave(judge: Omit<Judge, "urgent">): CardId | null {
   const { view, knowledge, facts, mine } = judge;
   const { moment } = knowledge;
-  if (!judge.uses("save-principle")) return false;
-  if (target !== (view.seat + 1) % view.config.numPlayers || id !== chop(knowledge, target)) {
-    return false;
-  }
+  if (!judge.uses("save-principle")) return null;
+  const next = nextSeat(view);
+  const id = chop(knowledge, next);
+  if (id === null) return null;
   const card = judge.seen(id)!;
   const visible = (other: Card) =>
     moment.hands.some((hand, seat) =>
@@ -524,13 +556,50 @@ function isUrgentSave(judge: Judge, target: Seat, id: CardId): boolean {
       facts.isCritical(card) ||
       (card.rank === 2 && !visible(card)) ||
       (isPlayable(moment, card) && !visible(card)));
-  if (!protectedCard) return false;
-  const busy = moment.hands[target]!.some((other) => {
-    const note = knowledge.common[other]!;
+  return protectedCard && !isBusy(judge, knowledge, next) ? id : null;
+}
+
+/**
+ * Whether `seat` has something to do other than discard their chop: a clued card the table knows
+ * is playable or trash, or a card they know they owe a prompt or finesse.
+ */
+function isBusy(judge: Omit<Judge, "urgent">, knowledge: Knowledge, seat: Seat): boolean {
+  const { moment, common } = knowledge;
+  const known = moment.hands[seat]!.some(
+    (id) =>
+      countsAsClued(knowledge, id) &&
+      (common[id]!.every((card) => isPlayable(moment, card)) ||
+        common[id]!.every((card) => judge.facts.isTrash(card, id))),
+  );
+  return known || owesPlay(judge, knowledge, seat);
+}
+
+/**
+ * Whether the next player, `seat`, will know some clue needs them to play now: every reading of it
+ * they can't rule out has them play a connecting card that is playable. A reading that needs the
+ * viewer to play is ruled out by the time they move, since the viewer doesn't play it this turn.
+ */
+function owesPlay(judge: Omit<Judge, "urgent">, knowledge: Knowledge, seat: Seat): boolean {
+  const open = knowledge.readings.map((reading) => ({ reading, live: pending(reading) }));
+  const involved = ({ live }: (typeof open)[number]) =>
+    live.some((interpretation) =>
+      interpretation.connections.some((connection) => connection.seat === seat),
+    );
+  if (!open.some(involved)) return false;
+  const known = seatKnows(judge, knowledge, seat);
+  return open.some(({ reading, live }) => {
+    const kept = live.filter(
+      (interpretation) =>
+        couldBe(known[reading.focus]!, interpretation.focusIdentity) &&
+        !interpretation.connections.some((connection) => connection.seat === judge.view.seat),
+    );
     return (
-      countsAsClued(knowledge, other) &&
-      (note.every((c) => isPlayable(moment, c)) || note.every((c) => facts.isTrash(c, other)))
+      kept.length > 0 &&
+      kept.every((interpretation) =>
+        interpretation.connections.some(
+          (connection) => connection.seat === seat && isPlayable(knowledge.moment, connection.card),
+        ),
+      )
     );
   });
-  return !busy;
 }

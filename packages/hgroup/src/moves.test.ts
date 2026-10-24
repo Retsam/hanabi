@@ -364,6 +364,81 @@ describe("clues", () => {
     expect(judged(game, { type: "clue", target: BOB, clue: five }).category).toBe("mandated");
     expect(judged(game, { type: "clue", target: CATHY, clue: five }).category).toBe("permitted");
   });
+
+  it("that save a card from chop are not urgent while the next player has a known play", () => {
+    // Bob's clued 1 is playable: he plays it before he would discard his y5.
+    const game = deal({
+      hands: [
+        ["r3", "g3", "b3", "p3", "r4"],
+        ["g1*", "b4", "p4", "r4", "y5"],
+        ["g4", "b4", "p4", "y4", "b5"],
+      ],
+    });
+    const five = { kind: "rank", value: 5 } as const;
+    expect(judged(game, { type: "clue", target: BOB, clue: five }).category).toBe("permitted");
+  });
+
+  it("that save a card from chop are not urgent while the next player owes a prompt", () => {
+    // Donald's red clue on Cathy's r3 prompts Bob's red card: he plays it before he would discard
+    // his y5.
+    const game = deal({
+      hands: [
+        ["p4", "g4", "b3", "y1"],
+        ["b4", "r*2", "y5", "g1"],
+        ["g4", "r3", "b4", "b1"],
+        ["p3", "p2", "y3", "y4"],
+      ],
+      drawPile: ["g3", "b2", "y2"],
+      stacks: { red: 1, yellow: 1, green: 1, blue: 1, purple: 1 },
+      clueTokens: 5,
+    })
+      .discard(3)
+      .discard(3)
+      .discard(3)
+      .clue(CATHY, "red");
+    expect(game.state.currentPlayer).toBe(ALICE);
+    const five = { kind: "rank", value: 5 } as const;
+    expect(judged(game, { type: "clue", target: BOB, clue: five }).category).toBe("permitted");
+  });
+
+  // beginner/other-general-strategy, "Give Play Clues Over Save Clues": a play clue keeps Bob busy,
+  // so his y5 needn't be saved yet.
+  it("that give the next player a card to play are preferred to saving their chop", () => {
+    const game = deal({
+      hands: [
+        ["r3", "b2", "p2", "y3", "g2"],
+        ["g1", "b3", "g4", "p4", "y5"],
+        ["r4", "b4", "p3", "y4", "g3"],
+      ],
+    });
+    const one = judged(game, { type: "clue", target: BOB, clue: { kind: "rank", value: 1 } });
+    const five = judged(game, { type: "clue", target: BOB, clue: { kind: "rank", value: 5 } });
+    expect(one.category).toBe("mandated");
+    expect(conventions(one)).toEqual(["play-clue", "save-principle"]);
+    expect(five.category).toBe("mandated");
+    expect(one.score).toBeGreaterThan(five.score);
+    // A delayed play clue leaves Bob nothing to play now, so it doesn't stand in for the save.
+    const four = judged(game, { type: "clue", target: BOB, clue: { kind: "rank", value: 4 } });
+    expect(four.category).not.toBe("mandated");
+  });
+
+  it("that make the next player blind-play also stand in for saving their chop", () => {
+    // Alice's red clue on Cathy's r2 finesses Bob's r1.
+    const game = deal({
+      hands: [
+        ["y3", "g3", "b3", "p3", "y4"],
+        ["r1", "g4", "b4", "p4", "y5"],
+        ["g5", "b5", "r2", "p5", "y4"],
+      ],
+    });
+    const red = judged(game, {
+      type: "clue",
+      target: CATHY,
+      clue: { kind: "color", value: "red" },
+    });
+    expect(red.category).toBe("mandated");
+    expect(conventions(red)).toEqual(["finesse", "save-principle"]);
+  });
 });
 
 describe("rankMoves", () => {

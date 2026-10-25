@@ -49,7 +49,7 @@ describe("saved games", () => {
       "{",
     ]) {
       const storage = memoryStorage();
-      storage.setItem("hanabi.currentGame", text);
+      storage.setItem("hanabi.currentGame:", text);
       expect(loadGame(storage)).toBeNull();
       expect(storage.items.size).toBe(0);
     }

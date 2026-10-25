@@ -75,15 +75,17 @@ export function rankMoves(view: PlayerView, level: Level): RankedMove[] {
   if (view.status === "over") return [];
   const judge = judgeFor(view, readGame(view, level));
   const clues = view.clueTokens > 0 ? cluesFor(view).map((given) => judgeClue(judge, given)) : [];
-  // A 5 Stall is not a play or save clue, so it doesn't hold off the end of the Early Game.
-  const anyClue = clues.some(
+  // Whether the viewer has a play or save clue to give. In the Early Game every such clue comes
+  // before discarding chop (`early-game`), so this decides whether a chop discard violates it. A
+  // 5 Stall is neither, so it doesn't hold off the end of the Early Game.
+  const playOrSaveClue = clues.some(
     (move) => move.category !== "violates" && move.reasons[0]!.convention !== "5-stall",
   );
   const hand = view.hands[view.seat]!;
   const plays = hand.map((id) => judgePlay(judge, id));
   const discards =
     view.clueTokens < view.config.maxClueTokens
-      ? hand.map((id) => judgeDiscard(judge, id, anyClue))
+      ? hand.map((id) => judgeDiscard(judge, id, playOrSaveClue))
       : [];
   return [...plays, ...discards, ...clues]
     .map((move, i) => ({ move, i }))
@@ -218,7 +220,7 @@ function isOwed(judge: Judge, id: CardId): boolean {
   });
 }
 
-function judgeDiscard(judge: Judge, id: CardId, anyClue: boolean): RankedMove {
+function judgeDiscard(judge: Judge, id: CardId, playOrSaveClue: boolean): RankedMove {
   const action = { type: "discard", cardId: id } as const;
   const { knowledge, view } = judge;
   const note = judge.mine[id]!;
@@ -235,7 +237,7 @@ function judgeDiscard(judge: Judge, id: CardId, anyClue: boolean): RankedMove {
       reason("chop", [id], "Only the chop card is discarded."),
     ]);
   }
-  if (knowledge.earlyGame && anyClue && judge.uses("early-game")) {
+  if (knowledge.earlyGame && playOrSaveClue && judge.uses("early-game")) {
     return move(action, "violates", -3, [
       reason(
         "early-game",

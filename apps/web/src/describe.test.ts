@@ -1,7 +1,7 @@
 import { history, playerView } from "@hanabi/engine";
 import { deal } from "@hanabi/engine/testing";
 import { describe, expect, it } from "vitest";
-import { describeAction, describeEvent } from "./describe.ts";
+import { chops, describeAction, describeEvent } from "./describe.ts";
 
 const ALICE = 0;
 const BOB = 1;
@@ -36,7 +36,22 @@ describe("describeEvent", () => {
     expect(lines).toEqual([
       "Alice clued You 2 on slots 1, 2",
       "You misplayed r2 (strike)",
-      "Alice discarded y2",
+      "Alice discarded y2 from slot 2",
+    ]);
+  });
+
+  it("marks a discard that isn't the mover's chop", () => {
+    const after = game.clue(BOB, 1).clue(ALICE, 5).discard(0).discard(2);
+    const moments = history(after.state);
+    const chopIds = chops(playerView(after.state, ALICE), 1);
+    const lines = after.events.map((event, i) =>
+      describeEvent(ALICE, event, moments[i]!, chopIds[i]),
+    );
+    expect(lines).toEqual([
+      "You clued Bob 1 on slots 4, 5",
+      "Bob clued You 5 on slot 5",
+      "You discarded r1 from slot 1 (!)",
+      "Bob discarded r3 from slot 3",
     ]);
   });
 });

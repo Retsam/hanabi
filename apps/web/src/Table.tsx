@@ -11,13 +11,15 @@ import {
   RANKS,
   type Seat,
 } from "@hanabi/engine";
-import { clueMatches } from "@hanabi/hgroup";
-import { useState } from "react";
+import { clueMatches, type Level } from "@hanabi/hgroup";
+import { useMemo, useState } from "react";
 import { HandCard } from "./Card.tsx";
-import { clueName, describeEvent, seatName } from "./describe.ts";
+import { chops, clueName, describeEvent, seatName } from "./describe.ts";
 
 export function Table(props: {
   view: PlayerView;
+  /** The table's H-Group level, for reading chops in the log. */
+  level: Level;
   /** The human's seat, shown at the bottom as "You". Defaults to the view's seat. */
   you?: Seat;
   /** Makes the human's moves. Without it the table is read-only. */
@@ -25,7 +27,7 @@ export function Table(props: {
   /** Cards to mark, such as the ones a reviewed move used. */
   highlight?: ReadonlySet<CardId>;
 }) {
-  const { view, you = view.seat, onAct, highlight } = props;
+  const { view, level, you = view.seat, onAct, highlight } = props;
   const [considering, setConsidering] = useState<{ target: Seat; clue: Clue } | null>(null);
   const live = view.status !== "over";
   const myTurn = onAct !== undefined && live && view.currentPlayer === you;
@@ -81,7 +83,7 @@ export function Table(props: {
         </section>
       ))}
       <Discards view={view} />
-      <Log view={view} you={you} />
+      <Log view={view} level={level} you={you} />
     </div>
   );
 }
@@ -177,9 +179,14 @@ function Discards({ view }: { view: PlayerView }) {
   );
 }
 
-function Log({ view, you }: { view: PlayerView; you: Seat }) {
-  const moments = history(view);
-  const lines = view.log.map((event: GameEvent, i) => describeEvent(you, event, moments[i]!));
+function Log({ view, level, you }: { view: PlayerView; level: Level; you: Seat }) {
+  const lines = useMemo(() => {
+    const moments = history(view);
+    const chopIds = chops(view, level);
+    return view.log.map((event: GameEvent, i) =>
+      describeEvent(you, event, moments[i]!, chopIds[i]),
+    );
+  }, [view, level, you]);
   return (
     <section className="log">
       <h2>Log</h2>

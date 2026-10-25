@@ -141,6 +141,51 @@ const STANDING: Record<Standing, string> = {
   worse: "Worse category than top",
 };
 
+/** What the move list's colors and marks mean, opened from the "?" button. */
+function MovesHelp() {
+  return (
+    <div id="moves-help" className="moves-help" popover="auto">
+      <h3>Reading the move list</h3>
+      <p>The dot is the move's category, judged from what its player could see:</p>
+      <ul>
+        <li>
+          <span className="dot mandated" /> Mandated: a move the conventions require
+        </li>
+        <li>
+          <span className="dot permitted" /> Permitted: allowed, ranked by how useful it is
+        </li>
+        <li>
+          <span className="dot violates" /> Violates: breaks a convention
+        </li>
+        <li>
+          <span className="dot forced" /> The engine's top move, though it breaks a convention:
+          every legal move did
+        </li>
+      </ul>
+      <p>The text color compares the move with the engine's top pick:</p>
+      <ul>
+        <li className="close">Orange: not the top move, but in the same category</li>
+        <li className="worse">Red: in a worse category than the top move</li>
+      </ul>
+      <p>Marks:</p>
+      <ul>
+        <li>
+          <strong>(#3)</strong>: where the move ranked among the legal moves
+        </li>
+        <li>
+          <strong>(!)</strong>: a discard of a card that wasn't the player's chop
+        </li>
+        <li>
+          <strong>Bold</strong>: your moves
+        </li>
+      </ul>
+      <button popoverTarget="moves-help" popoverTargetAction="hide">
+        Close
+      </button>
+    </div>
+  );
+}
+
 function TurnList(props: {
   turns: readonly ReviewedTurn[];
   you: Seat;
@@ -149,14 +194,13 @@ function TurnList(props: {
 }) {
   return (
     <section className="turn-list">
-      <h2>Moves</h2>
-      <ul className="legend">
-        {(["close", "worse", "forced"] as const).map((each) => (
-          <li key={each} className={each}>
-            {STANDING[each]}
-          </li>
-        ))}
-      </ul>
+      <div className="turn-list-head">
+        <h2>Moves</h2>
+        <button className="help" popoverTarget="moves-help" aria-label="What the colors mean">
+          ?
+        </button>
+      </div>
+      <MovesHelp />
       <ol>
         {props.turns.map(({ review, event, moment, chop }, i) => (
           <li

@@ -28,9 +28,10 @@ import {
   privateKnowledge,
   readGame,
   tableFacts,
+  type Table,
   type TableFacts,
 } from "./knowledge.ts";
-import { clueMatches, sameCard } from "./possibilities.ts";
+import { clueMatches, sameCard, type Sight } from "./possibilities.ts";
 import { couldBe, identity, narrowed, type Note } from "./notes.ts";
 import { seatsAfter, uniqBy } from "./util.ts";
 
@@ -163,21 +164,30 @@ interface Judge {
 }
 
 function judgeFor(view: PlayerView, knowledge: Knowledge): Judge {
-  const { moment, level } = knowledge;
   const facts = tableFacts(view, knowledge);
-  const uses = (convention: ConventionId) => applies(convention, level);
+  const uses = (convention: ConventionId) => applies(convention, knowledge.level);
   const seen = (id: CardId) => view.cards[id]!.card;
-  const visibleClued = moment.hands
-    .flat()
-    .filter((id) => isClued(moment, id) && seen(id) !== null)
-    .map((id) => ({ id, card: seen(id)! }));
-  const isTrash = (card: Card, self: CardId) =>
-    facts.isTrash(card, self) ||
-    (uses("good-touch") &&
-      visibleClued.some((other) => other.id !== self && sameCard(other.card, card)));
+  const isTrash = trashTest(view, knowledge);
   const mine = privateKnowledge(view, knowledge);
   const judge = { view, knowledge, facts, mine, uses, seen, isTrash };
   return { ...judge, urgent: urgentSave(judge) };
+}
+
+/** `Judge.isTrash` on `table`. Bad-touched cards are trash, so they make no other card a copy. */
+function trashTest(view: PlayerView, table: Table): Judge["isTrash"] {
+  const { moment } = table;
+  const facts = tableFacts(view, table);
+  const visibleClued = moment.hands
+    .flat()
+    .filter((id) => isClued(moment, id) && !table.badTouched.includes(id))
+    .flatMap((id) => {
+      const card = view.cards[id]!.card;
+      return card ? [{ id, card }] : [];
+    });
+  return (card: Card, self: CardId) =>
+    facts.isTrash(card, self) ||
+    (applies("good-touch", table.level) &&
+      visibleClued.some((other) => other.id !== self && sameCard(other.card, card)));
 }
 
 const move = (
@@ -194,7 +204,7 @@ function judgePlay(judge: Judge, id: CardId): RankedMove {
   const playable = (card: Card) => isPlayable(moment, card);
   // Checked first: a prompt with several candidates plays the leftmost before its note is pinned.
   // The clue promises the card is there, and its giver answers for the cards played on the way.
-  if (isOwed(judge, id)) {
+  if (owes(judge.view, judge.knowledge, judge.mine, judge.view.seat, id)) {
     const kind = isClued(moment, id) ? "prompt" : "finesse";
     return move(action, "mandated", 100, [
       reason(kind, [id], `A ${kind} is waiting on this card: play it now.`),
@@ -236,23 +246,32 @@ function misplaysOf(judge: Judge, id: CardId, cards: readonly Card[]): Misplay[]
   });
 }
 
-/** Whether some clue's still-possible reading needs `id` to play now as a prompt or finesse. */
-function isOwed(judge: Judge, id: CardId): boolean {
-  const { knowledge, mine, view } = judge;
-  return knowledge.readings.some((reading) => {
-    // Only where every reading the viewer can't rule out needs the card: a self-prompt that may be
+/**
+ * Whether some clue's still-possible reading needs `seat` to play `id` now as a prompt or finesse,
+ * as far as `seat` can tell from `known`, what they know.
+ */
+function owes(
+  sight: Sight,
+  knowledge: Knowledge,
+  known: readonly Note[],
+  seat: Seat,
+  id: CardId,
+  readings: readonly ClueReading[] = knowledge.readings,
+): boolean {
+  return readings.some((reading) => {
+    // Only where every reading the seat can't rule out needs the card: a self-prompt that may be
     // a direct play clue owes nothing yet.
-    const live = fitting(view, knowledge, reading, mine);
+    const live = fitting(sight, knowledge, reading, known);
     return (
       live.length > 0 &&
       live.every((interpretation) =>
         interpretation.connections.some(
           (connection) =>
-            connection.seat === view.seat &&
+            connection.seat === seat &&
             // A prompt can wait on a clued card the table knows will play first.
             isPlayable(knowledge.moment, connection.card) &&
             connectingCards(knowledge, connection).find((each) =>
-              couldBe(mine[each]!, connection.card),
+              couldBe(known[each]!, connection.card),
             ) === id,
         ),
       )
@@ -337,6 +356,7 @@ const CLUE_CHECKS: readonly ((judge: Judge, clue: ClueCase) => Finding | undefin
   minimumClueValue,
   copiesOwnClued,
   badTouch,
+  finesseSeen,
   savePrinciple,
   playOverSave,
 ];
@@ -419,7 +439,18 @@ function describeClue(
   focus: CardId,
   real: readonly Interpretation[],
 ): ClueCase {
-  const { knowledge, seen, isTrash } = judge;
+  const { knowledge, seen } = judge;
+  // A clue that is only real if a save touched a card as trash gets what that card was said to be.
+  const trashed = real.every((interpretation) => interpretation.badTouch)
+    ? uniqBy(real.flatMap((interpretation) => interpretation.badTouch!))
+    : [];
+  const isTrash =
+    trashed.length === 0
+      ? judge.isTrash
+      : trashTest(judge.view, {
+          ...knowledge,
+          badTouched: [...knowledge.badTouched, ...trashed],
+        });
   const newlyTouched = given.touched.filter((id) => !countsAsClued(knowledge, id));
   const bad = newlyTouched.filter((id, i) => {
     const card = seen(id)!;
@@ -489,6 +520,28 @@ function copiesOwnClued(judge: Judge, clue: ClueCase): Finding | undefined {
   return clue.saving
     ? { score: -5 * risky.length, reason: found }
     : { violates: -4 - risky.length, reason: found };
+}
+
+/**
+ * A finesse only works if the finessed player can tell they must blind-play: every reading they
+ * can't rule out from what they see needs their finesse position.
+ */
+function finesseSeen(judge: Judge, clue: ClueCase): Finding | undefined {
+  const reading = clue.after.readings.at(-1)!;
+  const finesses = clue.real.map((interpretation) =>
+    interpretation.connections.filter(({ kind }) => kind === "finesse"),
+  );
+  // A clue that is also true without a blind-play (a save, say) works either way.
+  if (finesses.some((each) => each.length === 0)) return undefined;
+  const blind = finesses.flat();
+  const lost = blind.find(({ seat, candidateIds }) => {
+    const known = seatKnows(judge, clue.after, seat);
+    const sight = seatSight(judge.view, clue.after, seat);
+    return !owes(sight, clue.after, known, seat, candidateIds[0]!, [reading]);
+  });
+  if (lost === undefined) return undefined;
+  const text = `Seat ${lost.seat} can't tell they must blind-play the ${name(lost.card)}.`;
+  return { violates: -30, reason: reason("finesse", [lost.candidateIds[0]!], text) };
 }
 
 /** Good Touch: the clue touches no trash, unless it saves a card that must not be lost. */
@@ -634,13 +687,18 @@ function receiverKeeps(judge: Judge, after: Knowledge, receiver: Seat): Interpre
  */
 function seatKnows(judge: Pick<Judge, "view" | "mine">, knowledge: Knowledge, seat: Seat): Note[] {
   const { view, mine } = judge;
-  const theirs = new Set(knowledge.moment.hands[seat]);
   const ours = new Set(knowledge.moment.hands[view.seat]);
-  const cards = view.cards.map((card) => (theirs.has(card.id) ? { ...card, card: null } : card));
   const common = knowledge.common.map((note, id) =>
     ours.has(id) ? narrowed(note, (card) => couldBe(mine[id]!, card)) : note,
   );
-  return privateKnowledge({ config: view.config, cards }, { ...knowledge, common });
+  return privateKnowledge(seatSight(view, knowledge, seat), { ...knowledge, common });
+}
+
+/** The cards `seat` sees: every card the viewer sees except their own hand. */
+function seatSight(view: PlayerView, knowledge: Knowledge, seat: Seat): Sight {
+  const theirs = new Set(knowledge.moment.hands[seat]);
+  const cards = view.cards.map((card) => (theirs.has(card.id) ? { ...card, card: null } : card));
+  return { config: view.config, cards };
 }
 
 const nextSeat = (view: PlayerView): Seat => (view.seat + 1) % view.config.numPlayers;

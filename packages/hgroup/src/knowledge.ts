@@ -38,6 +38,13 @@ export interface Table {
   readonly finessed: readonly CardId[];
   /** Whether nobody has discarded yet: the Early Game (`early-game`). */
   readonly earlyGame: boolean;
+  /**
+   * Clued cards Good Touch says will play only because a save touched them beside its focus. The
+   * Save Principle lets a save touch trash, so a later clue may show the note was wrong (`badTouch`).
+   */
+  readonly tentative: readonly CardId[];
+  /** Tentative cards every player agrees a save touched as trash: Good Touch no longer applies. */
+  readonly badTouched: readonly CardId[];
 }
 
 /** A clue as given (or as it would be given): who to whom, and the cards it touched, leftmost first. */
@@ -84,6 +91,12 @@ export interface Interpretation {
   readonly ruledOutOn: number | null;
   /** The turn a later event added this interpretation on (`wrong-prompt`), if not the clue's. */
   readonly since?: number;
+  /**
+   * Tentative cards (`Table.tentative`) this interpretation needs to be trash, though Good Touch
+   * said they would play. Only the readings that need no such card are used while one of them fits
+   * what a player knows, unless the player can see the card was trash. See `save-principle`.
+   */
+  readonly badTouch?: readonly CardId[];
 }
 
 /** How the table reads a clue. */
@@ -159,7 +172,29 @@ export function mayCopy(readings: readonly ClueReading[]) {
   const saves = readings.filter((reading) => focusCards(reading, "save").length > 0);
   const saved = (focus: CardId, other: CardId) =>
     saves.some((reading) => reading.focus === focus && reading.giverClued.includes(other));
-  return (a: CardId, b: CardId) => saved(a, b) || saved(b, a);
+  // A reading that needs a tentative card to be trash lets its focus be the card Good Touch said.
+  const badTouched = (focus: CardId, other: CardId) =>
+    readings.some(
+      (reading) =>
+        reading.focus === focus &&
+        pending(reading).some((interpretation) => interpretation.badTouch?.includes(other)),
+    );
+  return (a: CardId, b: CardId) =>
+    saved(a, b) || saved(b, a) || badTouched(a, b) || badTouched(b, a);
+}
+
+/**
+ * Which of the interpretations that fit what a player knows they go by: the ones that need a
+ * tentative card to be trash (`badTouch`) only if the player sees it is, or if nothing else fits.
+ */
+function preferred(
+  interpretations: readonly Interpretation[],
+  seesBadTouch: (id: CardId) => boolean = () => false,
+): Interpretation[] {
+  const ordinary = interpretations.filter(
+    (interpretation) => interpretation.badTouch?.every(seesBadTouch) ?? true,
+  );
+  return ordinary.length > 0 ? ordinary : [...interpretations];
 }
 
 /**
@@ -216,7 +251,14 @@ export function readGame(view: PlayerView, level: Level): Knowledge {
   // Cards can start the game already clued (in test scenarios), with no logged clue to read.
   // A test scenario can start with cards already discarded: past the Early Game.
   const earlyGame = view.opening.discardPile.length === 0;
-  const opening = { level, moment: view.opening, finessed: [], earlyGame };
+  const opening = {
+    level,
+    moment: view.opening,
+    finessed: [],
+    earlyGame,
+    tentative: [],
+    badTouched: [],
+  };
   const clued = startingNotes(view, opening.moment);
   const start: Knowledge = {
     ...opening,
@@ -235,17 +277,27 @@ export function readGame(view: PlayerView, level: Level): Knowledge {
  * change.
  */
 export function advance(view: PlayerView, knowledge: Knowledge, event: GameEvent): Knowledge {
-  const { level, moment, finessed, earlyGame, turn } = knowledge;
-  const table: Table = { level, moment, finessed, earlyGame, common: knowledge.common };
+  const { level, moment, finessed, earlyGame, tentative, badTouched, turn } = knowledge;
+  const table: Table = {
+    level,
+    moment,
+    finessed,
+    earlyGame,
+    tentative,
+    badTouched,
+    common: knowledge.common,
+  };
   let { readings } = knowledge;
   let common: Note[];
   let clued: Note[];
+  let added: CardId[] = [];
   if (event.type === "clue") {
     const { seat: giver, target, clue, touched } = event;
     const reading = readClue(view, table, { giver, target, clue, touched });
     readings = [...readings, { ...reading, turn }];
     common = applyReading(view, table, reading, table.common);
     clued = applyReading(view, table, reading, knowledge.clued);
+    added = tentativelyTouched(table, reading);
   } else {
     common = table.common.with(event.cardId, [event.card]);
     clued = knowledge.clued.with(event.cardId, [event.card]);
@@ -263,6 +315,7 @@ export function advance(view: PlayerView, knowledge: Knowledge, event: GameEvent
     ...table,
     moment: applyEvent(moment, event),
     common,
+    tentative: [...tentative, ...added],
     earlyGame: earlyGame && event.type !== "discard",
   };
   const next = resolve(view, after, readings, clued, { turn, event, before: moment });
@@ -383,15 +436,8 @@ export function readClue(view: PlayerView, table: Table, given: GivenClue): Clue
     uses,
   };
   const onChop = focus === chop(table, given.target);
-  const saves = onChop && uses("save-clue");
-  const rankSave = saves ? rankSaveFor(read) : undefined;
-  const interpretations = isFiveStall(read, onChop)
-    ? stallReadings(read)
-    : [
-        ...(saves ? saveReadings(read, rankSave) : []),
-        // A 5 or 2 clue on chop is a save, never a play clue.
-        ...(rankSave === undefined ? playReadings(read) : []),
-      ];
+  const ordinary = interpretationsOf(read, onChop);
+  const interpretations = [...ordinary, ...badTouchReadings(read, onChop, ordinary)];
   if (interpretations.length === 0) return offConvention;
 
   const conventions = uniqBy<ConventionId>([
@@ -402,6 +448,63 @@ export function readClue(view: PlayerView, table: Table, given: GivenClue): Clue
   if (othersTouched && uses("good-touch")) conventions.push("good-touch");
   return { ...given, giverClued, giverSawOffChop, focus, interpretations, conventions };
 }
+
+/** Every way a clue could be read on `read`'s table, saves first. */
+function interpretationsOf(read: ClueOnTable, onChop: boolean): Interpretation[] {
+  if (isFiveStall(read, onChop)) return stallReadings(read);
+  const saves = onChop && read.uses("save-clue");
+  const rankSave = saves ? rankSaveFor(read) : undefined;
+  return [
+    ...(saves ? saveReadings(read, rankSave) : []),
+    // A 5 or 2 clue on chop is a save, never a play clue.
+    ...(rankSave === undefined ? playReadings(read) : []),
+  ];
+}
+
+/**
+ * The extra ways a clue could be read if a save touched a tentative card as trash: the readings the
+ * clue gets on a table where that card has only its clues' possibilities, and not the ones it gets
+ * anyway. Only a card the table has identified matters, and only in a suit the focus could be: Good
+ * Touch changes what a clue can mean by making that card count as gotten.
+ */
+function badTouchReadings(
+  read: ClueOnTable,
+  onChop: boolean,
+  ordinary: readonly Interpretation[],
+): Interpretation[] {
+  const { view, table, given, focus, facts } = read;
+  const inHand = new Set(table.moment.hands.flat());
+  const result: Interpretation[] = [];
+  for (const id of table.tentative) {
+    if (!inHand.has(id) || table.badTouched.includes(id) || given.touched.includes(id)) continue;
+    const known = identity(table.common[id]!);
+    if (known === undefined || facts.isTrash(known, id)) continue;
+    if (!read.candidates.some((card) => card.suit === known.suit)) continue;
+    const common = table.common.with(id, cluePossibilities(view.config, table.moment.clues[id]!));
+    const untouched = { ...table, common };
+    const alternatives = interpretationsOf(
+      { ...read, table: untouched, facts: tableFacts(view, untouched, { ...given, focus }) },
+      onChop,
+    );
+    for (const interpretation of alternatives) {
+      if (interpretation.connections.some(({ candidateIds }) => candidateIds.includes(id))) {
+        continue;
+      }
+      if ([...ordinary, ...result].some((other) => sameReading(other, interpretation))) continue;
+      result.push({
+        ...interpretation,
+        conventions: uniqBy<ConventionId>([...interpretation.conventions, "save-principle"]),
+        badTouch: [id],
+      });
+    }
+  }
+  return result;
+}
+
+const sameReading = (a: Interpretation, b: Interpretation) =>
+  a.kind === b.kind &&
+  sameCard(a.focusIdentity, b.focusIdentity) &&
+  JSON.stringify(a.connections) === JSON.stringify(b.connections);
 
 /** A clue being read: the table it is given on, its focus, and what the focus could be. */
 interface ClueOnTable {
@@ -712,6 +815,16 @@ function applyReading(
   return common;
 }
 
+/**
+ * The cards `reading`'s clue newly touched beside a focus that may be saved: Good Touch says they
+ * will play, but a save may break Good Touch to touch them (`save-principle`).
+ */
+function tentativelyTouched(table: Table, reading: ClueReading): CardId[] {
+  const maySave = focusCards(reading, "save").length > 0;
+  if (!maySave || !applies("good-touch", table.level)) return [];
+  return reading.touched.filter((id) => id !== reading.focus && !isClued(table.moment, id));
+}
+
 /** The latest event, the turn it happened on, and the table just before it. */
 interface LastEvent {
   readonly turn: number;
@@ -736,24 +849,30 @@ function resolve(
 ): { table: Table; readings: readonly PastReading[] } {
   type State = { table: Table; readings: readonly PastReading[] };
   const rebuilt = (from: Table, ruled: readonly PastReading[]): Table => {
-    const settled = { ...from, common: settle(view, { ...from, common: [...clued] }, ruled) };
-    return { ...settled, ...narrow(settled, ruled) };
+    // A bad-touched card keeps only what its clues say, without Good Touch.
+    const start = clued.map((note, id) =>
+      from.badTouched.includes(id) ? cluePossibilities(view.config, from.moment.clues[id]!) : note,
+    );
+    const settled = { ...from, common: settle(view, { ...from, common: start }, ruled) };
+    return { ...settled, ...narrow(view, settled, ruled) };
   };
   const deduce = (state: State): State => {
     const settled = { ...state.table, common: settle(view, state.table, state.readings) };
     const ruled = ruleOut(settled, state.readings, last);
     if (ruled !== state.readings) return { table: rebuilt(settled, ruled), readings: ruled };
-    return { table: { ...settled, ...narrow(settled, ruled) }, readings: ruled };
+    return { table: { ...settled, ...narrow(view, settled, ruled) }, readings: ruled };
   };
   // The event itself may have ruled interpretations out already (`after-a-strike`).
   const ruledNow = readings.some((reading) =>
     reading.interpretations.some(({ ruledOutOn }) => ruledOutOn === last.turn),
   );
   const start = ruledNow ? rebuilt(table, readings) : table;
-  // Settling and narrowing only remove cards, so equal sizes mean nothing changed.
+  // Settling and narrowing only remove cards (a card found bad-touched is reset once, and stays
+  // bad-touched), so equal sizes mean nothing changed.
   const unchanged = (a: State, b: State) =>
     a.readings === b.readings &&
     a.table.finessed.length === b.table.finessed.length &&
+    a.table.badTouched.length === b.table.badTouched.length &&
     sameSizes(a.table.common, b.table.common);
   return fixpoint({ table: start, readings }, deduce, unchanged);
 }
@@ -783,7 +902,13 @@ function ruleOut(
           return false;
         }
         return connectingCards(table, connection).length > 0;
-      }));
+      }) &&
+      // A card that plays was not trash.
+      !(
+        last.event.type === "play" &&
+        last.event.success &&
+        interpretation.badTouch?.includes(last.event.cardId)
+      ));
   const result = readings.map((reading) => {
     if (reading.interpretations.every((interpretation) => possible(reading, interpretation))) {
       return reading;
@@ -817,15 +942,18 @@ export function connectingCards(
 }
 
 /**
- * Common knowledge narrowed to what each clue's remaining interpretations allow, and the cards they
- * all agree are finessed.
+ * Common knowledge narrowed to what each clue's remaining interpretations allow, the cards they
+ * all agree are finessed, and the tentative cards they all need to be trash. Such a card loses what
+ * Good Touch said and goes back to what its clues allow.
  */
 function narrow(
+  view: PlayerView,
   table: Table,
   readings: readonly PastReading[],
-): { common: Note[]; finessed: CardId[] } {
+): Pick<Table, "common" | "finessed" | "badTouched"> {
   const common = [...table.common];
   const finessed: CardId[] = [];
+  const badTouched = [...table.badTouched];
   for (const reading of readings) {
     const live = pending(reading);
     if (live.length === 0) continue;
@@ -836,8 +964,13 @@ function narrow(
     );
     for (const [id, cards] of pinned(table, live, () => true)) narrowNote(common, id, cards);
     finessed.push(...finessedBy(table, live));
+    for (const id of live[0]!.badTouch ?? []) {
+      if (badTouched.includes(id) || !live.every((each) => each.badTouch?.includes(id))) continue;
+      badTouched.push(id);
+      common[id] = cluePossibilities(view.config, table.moment.clues[id]!);
+    }
   }
-  return { common, finessed };
+  return { common, finessed, badTouched };
 }
 
 /** Narrows `notes[id]` to `cards`, unless that would leave nothing. */
@@ -916,7 +1049,9 @@ function settle(view: PlayerView, table: Table, readings: readonly ClueReading[]
       const card = known(id);
       if (card) count(card);
     }
-    const cluedKnown = [...inHand].filter((id) => isClued(moment, id) && known(id));
+    const cluedKnown = [...inHand].filter(
+      (id) => isClued(moment, id) && known(id) && !table.badTouched.includes(id),
+    );
 
     for (const id of inHand) {
       const own = known(id);
@@ -924,6 +1059,7 @@ function settle(view: PlayerView, table: Table, readings: readonly ClueReading[]
         const elsewhere = (accounted.get(key(card)) ?? 0) - (own && sameCard(own, card) ? 1 : 0);
         if (elsewhere >= copies(config, card)) return false;
         if (!isClued(moment, id) || !applies("good-touch", level)) return true;
+        if (table.badTouched.includes(id)) return true;
         // Good Touch: a clued card will play one day, so it is no card that has already played.
         if (hasPlayed(moment, card)) return false;
         return !cluedKnown.some(
@@ -949,7 +1085,7 @@ function settle(view: PlayerView, table: Table, readings: readonly ClueReading[]
  * a player who sees the focus of a clue knows whether they were prompted or finessed.
  */
 export function privateKnowledge(view: Sight, knowledge: Knowledge): Note[] {
-  const { moment, common, level, readings } = knowledge;
+  const { moment, common, level, readings, badTouched } = knowledge;
   const copy = mayCopy(readings);
   const visibleClued = moment.hands
     .flat()
@@ -960,7 +1096,9 @@ export function privateKnowledge(view: Sight, knowledge: Knowledge): Note[] {
     });
   const goodTouched = possibilities(view, (id) => {
     const note = common[id]!;
-    if (!isClued(moment, id) || !applies("good-touch", level)) return note;
+    if (!isClued(moment, id) || !applies("good-touch", level) || badTouched.includes(id)) {
+      return note;
+    }
     return narrowed(
       note,
       (card) => !visibleClued.some((seen) => !copy(id, seen.id) && sameCard(seen.card, card)),
@@ -972,14 +1110,23 @@ export function privateKnowledge(view: Sight, knowledge: Knowledge): Note[] {
   const rules = possibilities(view);
   const fallBack = (notes: Note[]) =>
     notes.map((note, id) => (note.length > 0 ? note : rules[id]!));
-  /** Each pending clue narrowed to the interpretations that fit what the viewer knows. */
+  // A tentative card the viewer sees was trash, though Good Touch said otherwise.
+  const seesBadTouch = (id: CardId) => {
+    const card = view.cards[id]!.card;
+    return badTouched.includes(id) || (card !== null && !couldBe(common[id]!, card));
+  };
+  /**
+   * Each pending clue narrowed to the interpretations that fit what the viewer knows (`preferred`).
+   * If they all need a tentative card to be trash, it loses what Good Touch said.
+   */
   const applyReadings = (known: Note[]): Note[] => {
     const could = (id: CardId, card: Card) => couldBe(known[id]!, card);
     const notes = [...known];
     const read = new Set<CardId>();
     for (const reading of readings) {
-      const live = fitting(view, knowledge, reading, known);
-      if (live.length === 0) continue;
+      const fits = fitting(view, knowledge, reading, known);
+      if (fits.length === 0) continue;
+      const live = preferred(fits, seesBadTouch);
       narrowNote(
         notes,
         reading.focus,
@@ -989,6 +1136,13 @@ export function privateKnowledge(view: Sight, knowledge: Knowledge): Note[] {
       for (const [id, cards] of pinned(knowledge, live, could)) {
         narrowNote(notes, id, cards);
         read.add(id);
+      }
+      for (const id of live[0]!.badTouch ?? []) {
+        if (!live.every((each) => each.badTouch?.includes(id))) continue;
+        notes[id] = narrowed(
+          rules[id]!,
+          (card) => !visibleClued.some((seen) => seen.id !== id && sameCard(seen.card, card)),
+        );
       }
     }
     // A card a clue's reading pins down counts as seen, so a Good Touch guess about another card
@@ -1144,7 +1298,7 @@ export function tableFacts(
   const gottenBy = (note: (id: CardId) => Note) =>
     moment.hands
       .flat()
-      .filter((id) => countsAsClued(table, id))
+      .filter((id) => countsAsClued(table, id) && !table.badTouched.includes(id))
       .flatMap((id) => {
         const card = identity(note(id));
         return card ? [{ id, card }] : [];

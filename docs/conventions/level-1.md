@@ -239,7 +239,9 @@ category, then score, then a fixed order: plays, discards, then clues by seat an
   to them, or a finesse or prompt on them through someone else's card) is mandated too, and scores
   above the save. A delayed play clue doesn't count: it gives them nothing to play yet.
 - **Judgment call:** a reading that needs the viewer to play is ignored when deciding what the next
-  player owes. The viewer isn't playing this turn, so it is ruled out before the next player moves.
+  player knows or owes. The viewer isn't playing this turn, so it is ruled out before the next player
+  moves. A play clue on Bob's r3 that might be a finesse on Alice for an r4 is an r3 by Bob's turn, so
+  he has a known play.
 - **Judgment call:** only the next player's chop is urgent. A card on a later player's chop can be
   saved by someone else before that player discards.
 

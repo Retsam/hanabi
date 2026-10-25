@@ -378,6 +378,25 @@ describe("clues", () => {
     expect(judged(game, { type: "clue", target: BOB, clue: five }).category).toBe("permitted");
   });
 
+  it("that save a card from chop are not urgent while the next player has a play clue", () => {
+    // Cathy's red clue on Bob's r3 could finesse Alice into an r3 for an r4. Alice doesn't play, so
+    // by Bob's turn it is the r3 and he plays it before he would discard his y5.
+    const game = deal({
+      hands: [
+        ["p4", "g4", "b3", "y3", "y1"],
+        ["b4", "r3", "g3", "y5", "g1"],
+        ["g4", "b4", "p3", "y4", "b1"],
+      ],
+      stacks: { red: 2, yellow: 1, green: 1, blue: 1, purple: 1 },
+      clueTokens: 5,
+    })
+      .discard(4)
+      .discard(4)
+      .clue(BOB, "red");
+    const five = { kind: "rank", value: 5 } as const;
+    expect(judged(game, { type: "clue", target: BOB, clue: five }).category).toBe("permitted");
+  });
+
   it("that save a card from chop are not urgent while the next player owes a prompt", () => {
     // Donald's red clue on Cathy's r3 prompts Bob's red card: he plays it before he would discard
     // his y5.

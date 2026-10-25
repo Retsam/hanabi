@@ -562,23 +562,45 @@ function urgentSave(judge: Omit<Judge, "urgent">): CardId | null {
 
 /**
  * Whether `seat` has something to do other than discard their chop: a clued card the table knows
- * is playable or trash, or a card they know they owe a prompt or finesse.
+ * is playable or trash, or a card they know they owe a prompt or finesse. What the table knows is
+ * as of the next player's turn (see `openAtNext`).
  */
 function isBusy(judge: Omit<Judge, "urgent">, knowledge: Knowledge, seat: Seat): boolean {
   const { moment, common } = knowledge;
-  const known = moment.hands[seat]!.some(
-    (id) =>
-      countsAsClued(knowledge, id) &&
-      (common[id]!.every((card) => isPlayable(moment, card)) ||
-        common[id]!.every((card) => judge.facts.isTrash(card, id))),
-  );
-  return known || owesPlay(judge, knowledge, seat);
+  const known = (id: CardId) =>
+    knowledge.readings
+      .filter((reading) => reading.focus === id)
+      .reduce((note, reading) => {
+        const open = openAtNext(judge, reading);
+        return narrowed(note, (card) =>
+          open.some((interpretation) => sameCard(interpretation.focusIdentity, card)),
+        );
+      }, common[id]!);
+  const knownPlay = moment.hands[seat]!.some((id) => {
+    if (!countsAsClued(knowledge, id)) return false;
+    const note = known(id);
+    return (
+      note.every((card) => isPlayable(moment, card)) ||
+      note.every((card) => judge.facts.isTrash(card, id))
+    );
+  });
+  return knownPlay || owesPlay(judge, knowledge, seat);
 }
 
 /**
+ * A reading's interpretations that are still open when the next player moves. One that needs the
+ * viewer to play is ruled out by then, since the viewer doesn't play it this turn.
+ */
+const openAtNext = (judge: Pick<Judge, "view">, reading: ClueReading) =>
+  pending(reading).filter(
+    (interpretation) =>
+      !interpretation.connections.some((connection) => connection.seat === judge.view.seat),
+  );
+
+/**
  * Whether the next player, `seat`, will know some clue needs them to play now: every reading of it
- * they can't rule out has them play a connecting card that is playable. A reading that needs the
- * viewer to play is ruled out by the time they move, since the viewer doesn't play it this turn.
+ * still open on their turn that they can't rule out has them play a connecting card that is
+ * playable.
  */
 function owesPlay(judge: Omit<Judge, "urgent">, knowledge: Knowledge, seat: Seat): boolean {
   const open = knowledge.readings.map((reading) => ({ reading, live: pending(reading) }));
@@ -588,11 +610,9 @@ function owesPlay(judge: Omit<Judge, "urgent">, knowledge: Knowledge, seat: Seat
     );
   if (!open.some(involved)) return false;
   const known = seatKnows(judge, knowledge, seat);
-  return open.some(({ reading, live }) => {
-    const kept = live.filter(
-      (interpretation) =>
-        couldBe(known[reading.focus]!, interpretation.focusIdentity) &&
-        !interpretation.connections.some((connection) => connection.seat === judge.view.seat),
+  return open.some(({ reading }) => {
+    const kept = openAtNext(judge, reading).filter((interpretation) =>
+      couldBe(known[reading.focus]!, interpretation.focusIdentity),
     );
     return (
       kept.length > 0 &&

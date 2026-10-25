@@ -6,6 +6,8 @@ import type { SessionOptions } from "./session.ts";
 export interface SavedGame {
   readonly options: SessionOptions;
   readonly record: Replay;
+  /** The player gave up on it before the end; it is kept for review until they start a new game. */
+  readonly abandoned?: boolean;
 }
 
 /** The part of the Web Storage API this uses, so tests can pass an in-memory one. */

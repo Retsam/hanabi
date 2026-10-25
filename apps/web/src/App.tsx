@@ -1,4 +1,4 @@
-import { maxScore, score } from "@hanabi/engine";
+import { type Action, maxScore, playerView, replay as replayGame, score } from "@hanabi/engine";
 import { useEffect, useRef, useState } from "react";
 import { clearGame, loadGame, type SavedGame, saveGame } from "./saved.ts";
 import {
@@ -15,7 +15,7 @@ const PLAYER_COUNTS: readonly PlayerCount[] = [2, 3, 4, 5];
 const randomSeed = () => Math.floor(Math.random() * 1_000_000);
 
 /** A game to play: new from its options, or resumed from a saved record. */
-type GameStart = Pick<SavedGame, "options"> & Partial<Pick<SavedGame, "record">>;
+type GameStart = Pick<SavedGame, "options"> & Partial<Pick<SavedGame, "record" | "abandoned">>;
 
 export function App() {
   const [start, setStart] = useState<GameStart | null>(loadGame);
@@ -63,14 +63,21 @@ function Setup({ onStart }: { onStart: (options: SessionOptions) => void }) {
   );
 }
 
-function Game({ options, record, onLeave }: GameStart & { onLeave: () => void }) {
-  const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
+function Game({ options, record, onLeave, ...start }: GameStart & { onLeave: () => void }) {
+  // An abandoned game is never played on, so its table comes straight from its record.
+  const [snapshot, setSnapshot] = useState<Snapshot | null>(() =>
+    start.abandoned === true && record !== undefined
+      ? { view: playerView(replayGame(record).state, options.humanSeat), record }
+      : null,
+  );
+  const [abandoned, setAbandoned] = useState(start.abandoned === true);
   const [error, setError] = useState<string | null>(null);
   const [reviewing, setReviewing] = useState(false);
   const [abandoning, setAbandoning] = useState(false);
   const session = useRef<Session | null>(null);
 
   useEffect(() => {
+    if (abandoned) return undefined;
     const started = startSession(
       options,
       (next) => {
@@ -81,7 +88,15 @@ function Game({ options, record, onLeave }: GameStart & { onLeave: () => void })
     );
     session.current = started;
     return () => started.stop();
-  }, [options, record]);
+  }, [options, record, abandoned]);
+
+  /** Stops the game where it stands and shows it as over, saved as abandoned so it can be reviewed. */
+  const abandon = () => {
+    session.current?.stop();
+    if (snapshot !== null) saveGame({ options, record: snapshot.record, abandoned: true });
+    setAbandoned(true);
+    setAbandoning(false);
+  };
 
   /** Ends this game for good: it is no longer saved, so a reload starts at the setup screen. */
   const leave = () => {
@@ -92,7 +107,7 @@ function Game({ options, record, onLeave }: GameStart & { onLeave: () => void })
 
   if (snapshot === null) return null;
   const { view, record: replay } = snapshot;
-  const over = view.status === "over";
+  const over = abandoned || view.status === "over";
   return (
     <div className="game">
       <header>
@@ -104,7 +119,7 @@ function Game({ options, record, onLeave }: GameStart & { onLeave: () => void })
         ) : abandoning ? (
           <span className="buttons">
             Abandon this game?
-            <button onClick={leave}>Abandon</button>
+            <button onClick={abandon}>Abandon</button>
             <button onClick={() => setAbandoning(false)}>Keep playing</button>
           </span>
         ) : (
@@ -115,7 +130,7 @@ function Game({ options, record, onLeave }: GameStart & { onLeave: () => void })
       {over && (
         <div className="over">
           <strong>
-            Game over: {score(view)}/{maxScore(view.config)}
+            {abandoned ? "Game abandoned" : "Game over"}: {score(view)}/{maxScore(view.config)}
           </strong>
           <span className="buttons">
             <button onClick={() => setReviewing(!reviewing)}>
@@ -133,7 +148,9 @@ function Game({ options, record, onLeave }: GameStart & { onLeave: () => void })
         <Table
           view={view}
           level={options.level}
-          onAct={(action) => setError(session.current?.submit(action) ?? null)}
+          {...(!over && {
+            onAct: (action: Action) => setError(session.current?.submit(action) ?? null),
+          })}
         />
       )}
     </div>

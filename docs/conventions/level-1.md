@@ -86,7 +86,8 @@ If every interpretation is ruled out, a teammate broke a convention: the cards k
 - **Source:** [beginner/5-save](https://hanabi.github.io/beginner/5-save),
   [level 1](https://hanabi.github.io/level-1#the-5-save).
 - **Reading:** a 5 clue focused on chop is a save, not a play clue, on any 5 that is not trash. A 5 clue
-  focused off chop is a play clue on the 5.
+  focused off chop is a play clue on the 5 (from level 2, a 5 Stall in the Early Game: see
+  [level-2.md](./level-2.md#5-stall)).
 
 ## `2-save`
 
@@ -256,9 +257,10 @@ category, then score, then a fixed order: plays, discards, then clues by seat an
 - **Source:** [level 1](https://hanabi.github.io/level-1#the-early-game).
 - **Rule:** before anyone has discarded, every available play and save clue is given before a player
   discards their chop.
-- **Ranking:** discarding the chop violates it while any clue is permitted. Discarding known trash
+- **Ranking:** discarding the chop violates it while any clue is permitted (other than a level 2 5 Stall). Discarding known trash
   does not end the Early Game, so it is not affected.
-- **Judgment call:** the Early Game ends at the first discard of any card, read from the log.
+- **Judgment call:** the Early Game ends at the first discard of any card, read from the log. A test
+  scenario that starts with cards in the discard pile is already past it.
 
 ## `2-save`: the Visible Rule
 

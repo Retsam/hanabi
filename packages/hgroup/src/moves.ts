@@ -75,7 +75,10 @@ export function rankMoves(view: PlayerView, level: Level): RankedMove[] {
   if (view.status === "over") return [];
   const judge = judgeFor(view, readGame(view, level));
   const clues = view.clueTokens > 0 ? cluesFor(view).map((given) => judgeClue(judge, given)) : [];
-  const anyClue = clues.some((move) => move.category !== "violates");
+  // A 5 Stall is not a play or save clue, so it doesn't hold off the end of the Early Game.
+  const anyClue = clues.some(
+    (move) => move.category !== "violates" && move.reasons[0]!.convention !== "5-stall",
+  );
   const hand = view.hands[view.seat]!;
   const plays = hand.map((id) => judgePlay(judge, id));
   const discards =
@@ -232,8 +235,7 @@ function judgeDiscard(judge: Judge, id: CardId, anyClue: boolean): RankedMove {
       reason("chop", [id], "Only the chop card is discarded."),
     ]);
   }
-  const earlyGame = !view.log.some((event) => event.type === "discard");
-  if (earlyGame && anyClue && judge.uses("early-game")) {
+  if (knowledge.earlyGame && anyClue && judge.uses("early-game")) {
     return move(action, "violates", -3, [
       reason(
         "early-game",
@@ -315,7 +317,7 @@ function judgeClue(judge: Judge, given: Given): RankedMove {
     reason(
       mainConvention(clue.primary),
       [clue.focus],
-      `Cluing ${said} is a ${clue.saving ? "save" : "play"} clue on the ${name(focusCard)}.`,
+      `Cluing ${said} is ${describeKind(clue.primary)} on the ${name(focusCard)}.`,
     ),
   ];
   let score = clueValue(judge, clue);
@@ -334,6 +336,13 @@ function judgeClue(judge: Judge, given: Given): RankedMove {
 }
 
 const isSave = (interpretation: Interpretation) => interpretation.kind === "save";
+
+const isStall = (interpretation: Interpretation) => interpretation.conventions.includes("5-stall");
+
+const describeKind = (interpretation: Interpretation) => {
+  if (isStall(interpretation)) return "a 5 Stall";
+  return `a ${isSave(interpretation) ? "save" : "play"} clue`;
+};
 
 function describeClue(
   judge: Judge,
@@ -363,11 +372,15 @@ function describeClue(
   };
 }
 
+const STALL_SCORE = 5;
+
 /**
  * What a clue is worth before the checks: each card it gets, each connection, a card to play now;
  * less if it spends the last clue token.
  */
 function clueValue(judge: Judge, clue: ClueCase): number {
+  // A stall only gets 5's that are safe off chop anyway: worth less than any play or save clue.
+  if (isStall(clue.primary)) return STALL_SCORE;
   let score = 10 * clue.gotten.length + 5 * clue.real[0]!.connections.length;
   if (isPlayable(judge.knowledge.moment, clue.focusCard) && !clue.saving) score += 10;
   if (judge.view.clueTokens === 1) score -= 5;
@@ -480,7 +493,7 @@ const uniqueNames = (interpretations: readonly Interpretation[]) =>
     .map((card) => `the ${name(card)}`)
     .join(" or ");
 
-const SAVES: readonly ConventionId[] = ["5-save", "2-save", "critical-save"];
+const SAVES: readonly ConventionId[] = ["5-save", "2-save", "critical-save", "5-stall"];
 
 /**
  * The convention a clue read as `interpretation` is an example of: its prompt(s) or finesse, its kind

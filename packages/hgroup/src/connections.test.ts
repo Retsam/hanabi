@@ -252,7 +252,8 @@ describe("chains of connections", () => {
   });
 
   // level-2#the-double-prompt: Cathy's y5 needs both of Bob's unidentified yellow cards, the
-  // position Retsam asked about (game-delayed-y5, turn 19).
+  // position Retsam asked about (game-delayed-y5, turn 19). It is past the Early Game, so the 5 clue
+  // is not a 5 Stall.
   const doublePrompt = deal({
     hands: [
       ["r3", "b3", "p3", "r4", "b4"],
@@ -260,6 +261,7 @@ describe("chains of connections", () => {
       ["b1", "y5", "p2", "r1", "p4"],
     ],
     stacks: { red: 2, yellow: 2, green: 4, blue: 2, purple: 2 },
+    discardPile: ["r1"],
     clueTokens: 6,
   }).clue(CATHY, 5);
   const cathysFive = doublePrompt.cardAt(1, CATHY);

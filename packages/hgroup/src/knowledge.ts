@@ -36,6 +36,8 @@ export interface Table {
    * See `finessed-cards-count-as-clued`.
    */
   readonly finessed: readonly CardId[];
+  /** Whether nobody has discarded yet: the Early Game (`early-game`). */
+  readonly earlyGame: boolean;
 }
 
 /** A clue as given (or as it would be given): who to whom, and the cards it touched, leftmost first. */
@@ -192,7 +194,9 @@ export const isPlayable = (moment: Moment, card: Card) =>
  */
 export function readGame(view: PlayerView, level: Level): Knowledge {
   // Cards can start the game already clued (in test scenarios), with no logged clue to read.
-  const opening = { level, moment: view.opening, finessed: [] };
+  // A test scenario can start with cards already discarded: past the Early Game.
+  const earlyGame = view.opening.discardPile.length === 0;
+  const opening = { level, moment: view.opening, finessed: [], earlyGame };
   const start: Knowledge = {
     ...opening,
     common: settle(view, { ...opening, common: startingNotes(view, opening.moment) }),
@@ -209,8 +213,8 @@ export function readGame(view: PlayerView, level: Level): Knowledge {
  * change.
  */
 export function advance(view: PlayerView, knowledge: Knowledge, event: GameEvent): Knowledge {
-  const { level, moment, finessed, turn } = knowledge;
-  const table: Table = { level, moment, finessed, common: knowledge.common };
+  const { level, moment, finessed, earlyGame, turn } = knowledge;
+  const table: Table = { level, moment, finessed, earlyGame, common: knowledge.common };
   let { readings } = knowledge;
   let common: Note[];
   if (event.type === "clue") {
@@ -221,10 +225,13 @@ export function advance(view: PlayerView, knowledge: Knowledge, event: GameEvent
   } else {
     common = table.common.with(event.cardId, [event.card]);
   }
-  const next = resolve(view, { ...table, moment: applyEvent(moment, event), common }, readings, {
-    turn,
-    event,
-  });
+  const after = {
+    ...table,
+    moment: applyEvent(moment, event),
+    common,
+    earlyGame: earlyGame && event.type !== "discard",
+  };
+  const next = resolve(view, after, readings, { turn, event });
   return { ...next.table, readings: next.readings, turn: turn + 1 };
 }
 
@@ -264,11 +271,13 @@ export function readClue(view: PlayerView, table: Table, given: GivenClue): Clue
   const onChop = focus === chop(table, given.target);
   const saves = onChop && uses("save-clue");
   const rankSave = saves ? rankSaveFor(read) : undefined;
-  const interpretations = [
-    ...(saves ? saveReadings(read, rankSave) : []),
-    // A 5 or 2 clue on chop is a save, never a play clue.
-    ...(rankSave === undefined ? playReadings(read) : []),
-  ];
+  const interpretations = isFiveStall(read, onChop)
+    ? stallReadings(read)
+    : [
+        ...(saves ? saveReadings(read, rankSave) : []),
+        // A 5 or 2 clue on chop is a save, never a play clue.
+        ...(rankSave === undefined ? playReadings(read) : []),
+      ];
   if (interpretations.length === 0) return offConvention;
 
   const conventions = uniqBy<ConventionId>([
@@ -335,6 +344,21 @@ function saveReadings(read: ClueOnTable, rankSave: "5-save" | "2-save" | undefin
   return candidates
     .filter((card) => card.rank !== 5 && facts.isCritical(card))
     .map((card) => readAs("save", card, ["save-clue", "critical-save"]));
+}
+
+/** Whether a clue is a 5 Stall: a number 5 clue off chop in the Early Game (`5-stall`). */
+function isFiveStall({ given: { clue }, table, uses }: ClueOnTable, onChop: boolean): boolean {
+  return clue.kind === "rank" && clue.value === 5 && !onChop && table.earlyGame && uses("5-stall");
+}
+
+/**
+ * The 5 Stall saves its focus like a 5 Save off chop: it is any 5 that isn't trash, and nothing has
+ * to play.
+ */
+function stallReadings({ candidates, facts, focus }: ClueOnTable): Interpretation[] {
+  return candidates
+    .filter((card) => !facts.isTrash(card, focus))
+    .map((card) => readAs("save", card, ["save-clue", "5-stall"]));
 }
 
 /** The play clues a clue can be, suit by suit: on the card its suit needs next, or one beyond. */

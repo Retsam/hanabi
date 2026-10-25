@@ -55,14 +55,17 @@ describe("runGame", () => {
     }
   });
 
-  it("passes each event and the state after it to onEvent", async () => {
+  it("passes each event, the state after it and its action to onEvent", async () => {
     const seen: number[] = [];
+    const taken: Action[] = [];
     const seat = recordingSeat().seat;
-    await runGame(endgame.state, [seat, seat], (event, state) => {
+    const { actions } = await runGame(endgame.state, [seat, seat], (event, state, action) => {
       expect(state.log.at(-1)).toBe(event);
       seen.push(state.turn);
+      taken.push(action);
     });
     expect(seen).toEqual([1, 2, 3]);
+    expect(taken).toEqual(actions);
   });
 
   it("throws when a seat chooses an illegal action", async () => {

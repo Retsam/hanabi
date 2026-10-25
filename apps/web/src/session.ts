@@ -8,6 +8,7 @@ import {
   type PlayerView,
   playerView,
   type Replay,
+  replay,
   type Seat,
   shuffledDeck,
   standardConfig,
@@ -31,8 +32,8 @@ export interface SessionOptions {
 /** What the UI renders after each change. */
 export interface Snapshot {
   readonly view: PlayerView;
-  /** The game's record, once it is over. */
-  readonly replay: Replay | null;
+  /** The game so far: its config, its deck and every action taken. Saving it is enough to resume. */
+  readonly record: Replay;
 }
 
 export interface Session {
@@ -42,19 +43,30 @@ export interface Session {
   stop(): void;
 }
 
-/** Deals a game and plays it, calling `onUpdate` with the human's view at the start and after every move. */
+/**
+ * Deals a game and plays it, calling `onUpdate` with the human's view at the start and after every
+ * move. Given a saved `record`, it resumes that game instead: it deals the record's deck and replays
+ * its actions, throwing if they do not replay.
+ */
 export function startSession(
   options: SessionOptions,
   onUpdate: (snapshot: Snapshot) => void,
+  record?: Replay,
 ): Session {
-  const config = standardConfig(options.numPlayers);
-  const deck = shuffledDeck(config, xoroshiro128plus(options.seed));
-  let state: GameState = createGame(config, deck);
+  const config = record?.config ?? standardConfig(options.numPlayers);
+  const deck = record?.deck ?? shuffledDeck(config, xoroshiro128plus(options.seed));
+  const actions: Action[] = [...(record?.actions ?? [])];
+  let state: GameState =
+    record === undefined ? createGame(config, deck) : replay({ config, deck, actions }).state;
   const abort = new AbortController();
   const human = humanSeat();
 
-  const update = (replay: Replay | null) => {
-    if (!abort.signal.aborted) onUpdate({ view: playerView(state, options.humanSeat), replay });
+  const update = () => {
+    if (abort.signal.aborted) return;
+    onUpdate({
+      view: playerView(state, options.humanSeat),
+      record: { config, deck, actions: [...actions] },
+    });
   };
 
   const seats = Array.from({ length: options.numPlayers }, (_, seat) =>
@@ -62,16 +74,14 @@ export function startSession(
       ? human.controller
       : paced(hgroupSeat(options.level), options.aiDelayMs, abort.signal),
   );
-  update(null);
-  void runGame(state, seats, (_, next) => {
+  update();
+  void runGame(state, seats, (_, next, action) => {
     state = next;
-    update(null);
-  }).then(
-    ({ actions }) => update({ config, deck, actions }),
-    (error: unknown) => {
-      if (!abort.signal.aborted) reportError(error);
-    },
-  );
+    actions.push(action);
+    update();
+  }).catch((error: unknown) => {
+    if (!abort.signal.aborted) reportError(error);
+  });
 
   return {
     submit(action) {

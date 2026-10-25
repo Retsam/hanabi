@@ -19,12 +19,12 @@ export interface GameRun {
 /**
  * Plays from `start` until the game is over, asking the current seat's controller for each move
  * and showing every seat its view of each event. `onEvent` sees each event with the full state
- * after it. Throws if a controller picks an illegal action, naming the seat and turn.
+ * after it and the action that caused it. Throws if a controller picks an illegal action, naming the seat and turn.
  */
 export async function runGame(
   start: GameState,
   seats: readonly SeatController[],
-  onEvent?: (event: GameEvent, state: GameState) => void,
+  onEvent?: (event: GameEvent, state: GameState, action: Action) => void,
 ): Promise<GameRun> {
   if (seats.length !== start.config.numPlayers) {
     throw new Error(`Got ${seats.length} seats for ${start.config.numPlayers} players`);
@@ -41,7 +41,7 @@ export async function runGame(
     const result = apply(state, action);
     state = result.state;
     actions.push(action);
-    onEvent?.(result.event, state);
+    onEvent?.(result.event, state, action);
     for (const [i, each] of seats.entries()) each.observe?.(result.event, playerView(state, i));
   }
   return { state, actions };

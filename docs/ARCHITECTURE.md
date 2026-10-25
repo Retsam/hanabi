@@ -178,6 +178,10 @@ interface SeatController {
 
 A human seat is a promise the UI resolves (`humanSeat` in `apps/web`). The web app keeps the full state
 out of React: a session plays the game with `runGame` and hands the UI only the human's `PlayerView`. Async also leaves room for running AIs in a Web Worker. A
+game in progress is saved to `localStorage` after every move as its options plus its replay record
+(config, deck, actions), never as state; a reload replays the record and plays on from there. A save
+that no longer replays is dropped. Finished games stay saved until the player starts a new one, so a
+later game history can be a list of the same records. A
 helper (`syncSeat`) wraps simple synchronous AIs. The only AI is the H-Group decision engine below: its
 seat controller (`hgroupSeat(level)`) plays the top-ranked move. There is no separate simple rule-based AI.
 

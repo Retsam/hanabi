@@ -13,7 +13,11 @@ export type GameStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
 /** Bump when `SavedGame` changes shape; saves from another version are dropped, not migrated. */
 const VERSION = 1;
-const KEY = "hanabi.currentGame";
+/**
+ * PR previews share main's origin (retsam.github.io), so the key includes the page's path: a
+ * preview's save can't clobber main's, nor drop it for not replaying under the preview's rules.
+ */
+const KEY = `hanabi.currentGame:${typeof location === "undefined" ? "" : location.pathname}`;
 
 /** The saved game, or null if there is none or it no longer replays (it is then removed). */
 export function loadGame(storage: GameStorage | null = browserStorage()): SavedGame | null {

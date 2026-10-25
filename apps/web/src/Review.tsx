@@ -170,14 +170,12 @@ function MovesHelp() {
       <p>Marks:</p>
       <ul>
         <li>
-          <strong>(#3)</strong>: where the move ranked among the legal moves
-        </li>
-        <li>
           <strong>(!)</strong>: a discard of a card that wasn't the player's chop
         </li>
         <li>
           <strong>Bold</strong>: your moves
         </li>
+        <li>Hover a move to see where it ranked among the legal moves.</li>
       </ul>
       <button popoverTarget="moves-help" popoverTargetAction="hide">
         Close
@@ -213,10 +211,12 @@ function TurnList(props: {
               .filter(Boolean)
               .join(" ")}
           >
-            <button onClick={() => props.onSelect(i)} title={STANDING[standing(review)]}>
+            <button
+              onClick={() => props.onSelect(i)}
+              title={`${STANDING[standing(review)]}: ranked ${review.rank} of ${review.moves}`}
+            >
               <span className={`dot ${review.move.category} ${standing(review)}`} />
               {describeEvent(props.you, event, moment, chop)}
-              {review.rank > 1 && <span className="rank-note"> (#{review.rank})</span>}
             </button>
           </li>
         ))}

@@ -31,7 +31,8 @@ interpretations allow. An interpretation is ruled out when:
   out);
 - no card can still be its connecting card: a prompted player's candidates have all turned out to be
   other cards;
-- its finessed player took their turn without blind-playing the card (finesses are urgent).
+- its finessed player took their turn without blind-playing the card (finesses are urgent);
+- it needs a card a save touched to be trash (see `save-principle`), and that card played.
 
 If every interpretation is ruled out, a teammate broke a convention: the cards keep what they had.
 
@@ -200,6 +201,11 @@ category, then score, then a fixed order: plays, discards, then clues by seat an
   interpretations the receiver keeps and every connection is real: the prompted card is the leftmost
   candidate, and the finesse position holds the card. Otherwise it is misread and violates the
   conventions. A permitted clue can still fail one of the principles below.
+- **Judgment call:** a finesse is only permitted if the finessed player can tell they must blind-play:
+  every reading they can't rule out from what they see (the viewer's cards counting as anything the
+  viewer thinks they could be) needs their finesse position. The site doesn't spell this out, but a
+  finesse the blind-player can't see fails. A clue that is also true without the blind-play, like a
+  save that could be a finesse, is fine either way.
 - **Scores:** a clue scores for each new card it gets, for a focus that is playable now and for each
   connecting card. Among violations, the score puts the least harmful first: a clue that gets nothing,
   then one that means nothing at the table's level, then discards and clues that lose or mislead about
@@ -233,6 +239,21 @@ category, then score, then a fixed order: plays, discards, then clues by seat an
   keeps y2 as a possibility for their own clued 2. Cards the giver could see are still ruled out: they
   would have made the saved card not unique. So is a card in the giver's hand clued after the save,
   since its cluer could see the saved card.
+- **Judgment call (tentative Good Touch):** the site says that when a save breaks Good Touch, "the clue
+  receiver will write wrong notes on some of their cards", and has nothing on undoing them before the
+  Fix Clue (level 3). We let a later clue undo them. Good Touch on a card a save touched beside its
+  focus is tentative (`Table.tentative`). Reading a later clue, the table also tries each tentative
+  card it has identified with only its clues' possibilities, and keeps the extra readings that gives
+  (marked `badTouch`). A player uses them only if they can see the card was trash, or if no other
+  reading fits what they see. So when Alice's 2 Save also touches Bob's trash r2, the table reads it as
+  the b2. When Alice then clues Cathy's b2, Bob sees a b2 that can't be clued under Good Touch unless
+  his card is not the b2. Alice can see his card, so the save touched trash: Bob blind-plays the b1
+  from his finesse position and knows his 2 is trash. Cathy sees the r2 and keeps both the b1 and the
+  b2. Once every reading left needs the card to be trash, the whole table agrees (`Table.badTouched`):
+  Good Touch no longer applies to it and it goes back to what its clues allow. A reading that needs a
+  card to be trash is ruled out if that card plays. Only a card the table has identified counts, since
+  Good Touch changes what a later clue can mean by making that card gotten. From a played game
+  (`connections.test.ts`).
 - **Play Clues Over Save Clues:** [beginner/other-general-strategy](https://hanabi.github.io/beginner/other-general-strategy)
   says "There's no need to save a card now if you can preoccupy the player with playing a card!" So
   when the next player's chop needs saving, a clue that leaves them a card to play now (a play clue

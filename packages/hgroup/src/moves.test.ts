@@ -441,6 +441,50 @@ describe("clues", () => {
   });
 });
 
+const blindPlay = (move: { reasons: readonly { text: string }[] }) =>
+  move.reasons.some((reason) => reason.text.includes("must blind-play"));
+
+describe("finesse clues", () => {
+  // beginner/finesse, first example: Bob sees Cathy's r4, so he knows to blind-play.
+  it("are permitted when the finessed player can tell they must blind-play", () => {
+    const game = deal({
+      hands: [
+        ["y3", "g3", "b3", "p3", "y4"],
+        ["r3", "g4", "b4", "p4", "y4"],
+        ["g5", "b5", "r4", "p5", "y5"],
+      ],
+      stacks: { red: 2, yellow: 2, green: 2, blue: 2, purple: 2 },
+    });
+    const red = judged(game, {
+      type: "clue",
+      target: CATHY,
+      clue: { kind: "color", value: "red" },
+    });
+    expect(red.category).toBe("permitted");
+    expect(blindPlay(red)).toBe(false);
+  });
+
+  it("don't need the blind-play when the clue is also a save", () => {
+    // Cathy's p4 on chop is critical, so purple saves it, and it is also a finesse on Bob's p3.
+    const game = deal({
+      hands: [
+        ["g4", "g3", "y4", "b4", "r4"],
+        ["p3", "y3", "y4", "r4", "p5"],
+        ["b1", "r3", "r5", "y5", "p4"],
+      ],
+      stacks: { red: 3, yellow: 0, green: 2, blue: 3, purple: 2 },
+      discardPile: ["p4"],
+    });
+    const purple = judged(game, {
+      type: "clue",
+      target: CATHY,
+      clue: { kind: "color", value: "purple" },
+    });
+    expect(purple.category).not.toBe("violates");
+    expect(blindPlay(purple)).toBe(false);
+  });
+});
+
 describe("rankMoves", () => {
   it("returns nothing once the game is over", () => {
     const game = deal({

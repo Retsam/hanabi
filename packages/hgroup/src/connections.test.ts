@@ -308,3 +308,115 @@ describe("chains of connections", () => {
     });
   });
 });
+
+describe("a save that touched trash", () => {
+  // From a played game: Alice's 2 Save on Bob's p2 also touches his r2, which is trash. By Good Touch
+  // the table reads it as the b2 once the purple clue rules out p2. Then Alice clues Cathy's b2.
+  const setup = (cathysBlue: string) =>
+    deal({
+      hands: [
+        ["g4", "y4", "r4", "g3", "y3"],
+        ["r3", "g5", "g1", "r2", "p2"],
+        [cathysBlue, "r1", "y1", "g4", "p4"],
+      ],
+      // The other copy of Cathy's blue card goes in the draw pile.
+      drawPile: [
+        "b1",
+        "b1",
+        cathysBlue === "b1" ? "b2" : "b1",
+        "b2",
+        "b3",
+        "b3",
+        "b4",
+        "b4",
+        "y2",
+        "g2",
+      ],
+      stacks: { red: 2, yellow: 2, green: 2, blue: 0, purple: 1 },
+    })
+      .clue(BOB, 2)
+      .discard(2)
+      .clue(BOB, "purple");
+  const before = setup("b2");
+  const bobsTwo = before.cardAt(3, BOB);
+  const bobsFinessePosition = before.cardAt(0, BOB);
+  const game = before.clue(CATHY, "blue");
+  const cathysBlue = game.cardAt(0, CATHY);
+
+  it("leaves Good Touch's reading of the trash card in common knowledge", () => {
+    expect(common(before, ALICE, bobsTwo)).toEqual(["b2"]);
+    expect(read(before, ALICE).tentative).toEqual([bobsTwo]);
+  });
+
+  it("read a later clue that only makes sense if the save touched trash", () => {
+    const reading = lastReading(game, ALICE);
+    expect(
+      reading.interpretations.map(({ focusIdentity, connections, badTouch }) => [
+        names([focusIdentity]),
+        connections.map(({ kind, seat, ids }) => ({ kind, seat, ids })),
+        badTouch,
+      ]),
+    ).toEqual([
+      [["b1"], [], undefined],
+      [
+        ["b3"],
+        [
+          { kind: "finesse", seat: BOB, ids: [bobsFinessePosition] },
+          { kind: "prompt", seat: BOB, ids: [bobsTwo] },
+        ],
+        undefined,
+      ],
+      [["b2"], [{ kind: "finesse", seat: BOB, ids: [bobsFinessePosition] }], [bobsTwo]],
+    ]);
+    expect(common(game, ALICE, cathysBlue)).toEqual(["b1", "b2", "b3"]);
+  });
+
+  it("let a player who sees the trash card keep both readings", () => {
+    expect(own(game, CATHY, cathysBlue)).toEqual(["b1", "b2"]);
+  });
+
+  it("tell the finessed player their card was trash, and to blind-play", () => {
+    // Bob sees the b2: the plain reading doesn't fit, so the save must have touched trash.
+    expect(own(game, BOB, bobsTwo)).toEqual(["r2", "y2", "g2"]);
+    expect(own(game, BOB, bobsFinessePosition)).toEqual(["b1"]);
+    expect(rankMoves(playerView(game.state, BOB), 1)[0]).toMatchObject({
+      action: { type: "play", cardId: bobsFinessePosition },
+      category: "mandated",
+    });
+  });
+
+  it("let the whole table agree once the b2 plays", () => {
+    const blindPlayed = game.play(0);
+    // Bob's card could still be the b2 that makes Cathy's the b3, but Cathy sees it isn't.
+    expect(common(blindPlayed, ALICE, cathysBlue)).toEqual(["b2", "b3"]);
+    expect(own(blindPlayed, CATHY, cathysBlue)).toEqual(["b2"]);
+    const played = blindPlayed.play(0);
+    const knowledge = read(played, ALICE);
+    expect(knowledge.badTouched).toEqual([bobsTwo]);
+    expect(names(knowledge.common[bobsTwo]!)).toEqual(["r2", "y2", "g2", "b2"]);
+    expect(rankMoves(playerView(played.state, BOB), 1)).toContainEqual(
+      expect.objectContaining({
+        action: { type: "discard", cardId: bobsTwo },
+        reasons: [expect.objectContaining({ convention: "trash" })],
+      }),
+    );
+  });
+
+  it("keep Good Touch while the plain reading fits", () => {
+    const plain = setup("b1").clue(CATHY, "blue");
+    expect(own(plain, BOB, bobsTwo)).toEqual(["b2"]);
+    expect(rankMoves(playerView(plain.state, BOB), 1)[0]!.action).not.toEqual({
+      type: "play",
+      cardId: bobsFinessePosition,
+    });
+  });
+
+  it("let the clue giver finesse through the trash card", () => {
+    const blue = rankMoves(playerView(before.state, ALICE), 1).find(
+      ({ action }) =>
+        action.type === "clue" && action.target === CATHY && action.clue.value === "blue",
+    );
+    expect(blue).toMatchObject({ category: "permitted" });
+    expect(blue!.reasons[0]!.text).toBe("Cluing blue to seat 2 is a play clue on the blue 2.");
+  });
+});

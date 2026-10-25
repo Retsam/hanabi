@@ -4,7 +4,7 @@ import { type CardId, playerView, type PlayerView, type Replay, type Seat } from
 import type { Category, Level, RankedMove } from "@hanabi/hgroup";
 import { useEffect, useState } from "react";
 import { describeAction, describeEvent, seatName } from "./describe.ts";
-import { type ReviewedTurn, reviewTurns } from "./review.ts";
+import { type ReviewedTurn, reviewTurns, type Standing, standing } from "./review.ts";
 import { Table } from "./Table.tsx";
 
 /**
@@ -44,7 +44,7 @@ export function Review(props: { replay: Replay; level: Level; you: Seat }) {
   if (turns === null) return <p>Reviewing…</p>;
   const turn = turns[index];
   if (turn === undefined) return <p>No moves to review.</p>;
-  const { review, state, event, moment } = turn;
+  const { review, state, event, moment, chop } = turn;
   const actorView = playerView(state, review.seat);
   const next = (review.seat + 1) % state.config.numPlayers;
   const view: PlayerView =
@@ -89,15 +89,16 @@ export function Review(props: { replay: Replay; level: Level; you: Seat }) {
       </div>
       <div className="review-body">
         <div>
-          <section className={`verdict ${review.move.category}`}>
+          <section className={`verdict ${review.move.category} ${standing(review)}`}>
             <h2>
               {review.seat === you ? "Your move" : `${seatName(you, review.seat)}'s move`}, as{" "}
               {review.seat === you ? "you" : "they"} saw the table
             </h2>
-            <p className="move">{describeEvent(you, event, moment)}</p>
+            <p className="move">{describeEvent(you, event, moment, chop)}</p>
             <Judged move={review.move} />
             <p className="rank">
               Ranked {review.rank} of {review.moves} legal moves
+              {standing(review) === "forced" && ", so every move breaks a convention"}
             </p>
             {review.alternative !== undefined && (
               <details open={review.rank > 1}>
@@ -109,7 +110,7 @@ export function Review(props: { replay: Replay; level: Level; you: Seat }) {
               </details>
             )}
           </section>
-          <Table view={view} you={you} highlight={used} />
+          <Table view={view} level={props.level} you={you} highlight={used} />
         </div>
         <TurnList turns={turns} you={you} index={index} onSelect={setIndex} />
       </div>
@@ -133,6 +134,13 @@ function Judged({ move }: { move: RankedMove }) {
   );
 }
 
+const STANDING: Record<Standing, string> = {
+  best: "Top move",
+  forced: "Top move, but a violation",
+  close: "Not top, same category",
+  worse: "Worse category than top",
+};
+
 function TurnList(props: {
   turns: readonly ReviewedTurn[];
   you: Seat;
@@ -142,21 +150,28 @@ function TurnList(props: {
   return (
     <section className="turn-list">
       <h2>Moves</h2>
+      <ul className="legend">
+        {(["close", "worse", "forced"] as const).map((each) => (
+          <li key={each} className={each}>
+            {STANDING[each]}
+          </li>
+        ))}
+      </ul>
       <ol>
-        {props.turns.map(({ review, event, moment }, i) => (
+        {props.turns.map(({ review, event, moment, chop }, i) => (
           <li
             key={i}
             className={[
               i === props.index && "selected",
               review.seat === props.you && "mine",
-              review.rank > 1 && "off",
+              standing(review),
             ]
               .filter(Boolean)
               .join(" ")}
           >
-            <button onClick={() => props.onSelect(i)}>
-              <span className={`dot ${review.move.category}`} />
-              {describeEvent(props.you, event, moment)}
+            <button onClick={() => props.onSelect(i)} title={STANDING[standing(review)]}>
+              <span className={`dot ${review.move.category} ${standing(review)}`} />
+              {describeEvent(props.you, event, moment, chop)}
               {review.rank > 1 && <span className="rank-note"> (#{review.rank})</span>}
             </button>
           </li>

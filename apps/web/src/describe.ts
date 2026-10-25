@@ -9,7 +9,7 @@ import type {
   PlayerView,
   Seat,
 } from "@hanabi/engine";
-import { clueMatches } from "@hanabi/hgroup";
+import { advance, chop, clueMatches, type Level, readGame } from "@hanabi/hgroup";
 
 const NAMES = ["Alice", "Bob", "Cathy", "Donald", "Emily"];
 
@@ -23,17 +23,27 @@ export const cardName = (card: Card) => `${card.suit[0]}${card.rank}`;
 export const clueName = (clue: Clue) => String(clue.value);
 
 /**
- * One line saying what happened, like "Alice clued Bob red on slots 1, 3". `moment` is the table the
- * event happened on, for the slots a clue touched.
+ * One line saying what happened, like "Alice clued Bob red on slots 1, 3" or "Bob discarded y2 from
+ * slot 4". `moment` is the table the event happened on, for the slots used. `chopId` is the mover's
+ * chop then, from `chops`: a discard of any other card is marked "(!)".
  */
-export function describeEvent(you: Seat, event: GameEvent, moment: Moment): string {
+export function describeEvent(
+  you: Seat,
+  event: GameEvent,
+  moment: Moment,
+  chopId?: CardId | null,
+): string {
   const who = seatName(you, event.seat);
   if (event.type === "play") {
     return event.success
       ? `${who} played ${cardName(event.card)}`
       : `${who} misplayed ${cardName(event.card)} (strike)`;
   }
-  if (event.type === "discard") return `${who} discarded ${cardName(event.card)}`;
+  if (event.type === "discard") {
+    const slot = moment.hands[event.seat]!.indexOf(event.cardId) + 1;
+    const offChop = chopId != null && chopId !== event.cardId;
+    return `${who} discarded ${cardName(event.card)} from slot ${slot}${offChop ? " (!)" : ""}`;
+  }
   return `${who} clued ${seatName(you, event.target)} ${clueName(event.clue)} on ${slots(moment.hands[event.target]!, event.touched)}`;
 }
 
@@ -56,4 +66,17 @@ export function describeAction(you: Seat, view: PlayerView, action: Action): str
 function slots(hand: readonly CardId[], touched: readonly CardId[]): string {
   const list = touched.map((id) => hand.indexOf(id) + 1).toSorted((a, b) => a - b);
   return `slot${list.length === 1 ? "" : "s"} ${list.join(", ")}`;
+}
+
+/**
+ * For each event in `view`'s log, the mover's chop on the table it happened on, as every player
+ * agrees it at `level` (finessed cards count as clued).
+ */
+export function chops(view: PlayerView, level: Level): (CardId | null)[] {
+  let knowledge = readGame({ ...view, log: [] }, level);
+  return view.log.map((event) => {
+    const before = chop(knowledge, event.seat);
+    knowledge = advance(view, knowledge, event);
+    return before;
+  });
 }

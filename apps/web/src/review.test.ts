@@ -2,7 +2,8 @@ import { hgroupSeat, runGame } from "@hanabi/ai";
 import { createGame, shuffledDeck, standardConfig } from "@hanabi/engine";
 import { xoroshiro128plus } from "pure-rand/generator/xoroshiro128plus";
 import { describe, expect, it } from "vitest";
-import { reviewTurns } from "./review.ts";
+import type { Category, RankedMove, TurnReview } from "@hanabi/hgroup";
+import { reviewTurns, standing } from "./review.ts";
 
 describe("reviewTurns", () => {
   it("lines up each move's review with the state, event and table it happened on", async () => {
@@ -23,5 +24,30 @@ describe("reviewTurns", () => {
       // Self-play takes the top move, so every move ranks first.
       expect(review.rank).toBe(1);
     }
+  });
+});
+
+const ranked = (category: Category): RankedMove => ({
+  action: { type: "discard", cardId: 0 },
+  category,
+  score: 0,
+  reasons: [],
+});
+const turn = (category: Category, rank: number, top: Category): TurnReview => ({
+  turn: 0,
+  seat: 0,
+  move: ranked(category),
+  rank,
+  moves: 3,
+  alternative: ranked(top),
+});
+
+describe("standing", () => {
+  it("compares the move with the engine's top pick", () => {
+    expect(standing(turn("permitted", 1, "permitted"))).toBe("best");
+    expect(standing(turn("violates", 1, "violates"))).toBe("forced");
+    expect(standing(turn("permitted", 2, "permitted"))).toBe("close");
+    expect(standing(turn("violates", 3, "violates"))).toBe("close");
+    expect(standing(turn("permitted", 2, "mandated"))).toBe("worse");
   });
 });

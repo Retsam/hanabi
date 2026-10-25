@@ -130,7 +130,11 @@ function Game({ options, record, onLeave }: GameStart & { onLeave: () => void })
       {over && reviewing ? (
         <Review replay={replay} level={options.level} you={options.humanSeat} />
       ) : (
-        <Table view={view} onAct={(action) => setError(session.current?.submit(action) ?? null)} />
+        <Table
+          view={view}
+          level={options.level}
+          onAct={(action) => setError(session.current?.submit(action) ?? null)}
+        />
       )}
     </div>
   );

@@ -745,6 +745,7 @@ export function privateKnowledge(view: Sight, knowledge: Knowledge): Note[] {
   const applyReadings = (known: Note[]): Note[] => {
     const could = (id: CardId, card: Card) => couldBe(known[id]!, card);
     const notes = [...known];
+    const read = new Set<CardId>();
     for (const reading of readings) {
       const live = pending(reading).filter(
         (interpretation) =>
@@ -761,9 +762,24 @@ export function privateKnowledge(view: Sight, knowledge: Knowledge): Note[] {
         reading.focus,
         live.map((interpretation) => interpretation.focusIdentity),
       );
-      for (const [id, cards] of pinned(knowledge, live, could)) narrowNote(notes, id, cards);
+      read.add(reading.focus);
+      for (const [id, cards] of pinned(knowledge, live, could)) {
+        narrowNote(notes, id, cards);
+        read.add(id);
+      }
     }
-    return fallBack(possibilities(view, (id) => notes[id]!));
+    // A card a clue's reading pins down counts as seen, so a Good Touch guess about another card
+    // can't take the last copy of its identity: that other card is bad touched instead.
+    const settled: Sight = {
+      config: view.config,
+      cards: view.cards.map((cardView) => {
+        const note = notes[cardView.id]!;
+        return cardView.card === null && read.has(cardView.id) && note.length === 1
+          ? { ...cardView, card: note[0]! }
+          : cardView;
+      }),
+    };
+    return fallBack(possibilities(settled, (id) => notes[id]!));
   };
   return fixpoint(fallBack(goodTouched), applyReadings, sameSizes);
 }

@@ -236,7 +236,7 @@ export function advance(view: PlayerView, knowledge: Knowledge, event: GameEvent
     common,
     earlyGame: earlyGame && event.type !== "discard",
   };
-  const next = resolve(view, after, readings, { turn, event });
+  const next = resolve(view, after, readings, { turn, event, before: moment });
   return { ...next.table, readings: next.readings, turn: turn + 1 };
 }
 
@@ -421,7 +421,6 @@ function connectedPlay(
       conventions: uniqBy([...chain.conventions, ...conventions]),
       prompts: chain.prompts + (conventions.includes("prompt") ? 1 : 0),
     };
-    const multiPrompt = longer.prompts > 1 ? ["multi-prompt" as const] : [];
     if (!allows(read, longer)) return [];
     // Trash can't be the focus, but a chain can pass through it: a clued card the table already
     // knows is the card plays anyway.
@@ -431,7 +430,7 @@ function connectedPlay(
             readAs(
               "play",
               card,
-              ["play-clue", ...longer.conventions, ...multiPrompt],
+              ["play-clue", ...longer.conventions, ...combined(longer)],
               [...longer.connections],
             ),
           ]
@@ -440,14 +439,26 @@ function connectedPlay(
   });
 }
 
+const finesseCount = ({ connections }: Chain) =>
+  connections.filter(({ kind }) => kind === "finesse").length;
+
+/** The level 2 conventions that let a clue ask for `chain`'s mix of prompts and finesses. */
+function combined(chain: Chain): ConventionId[] {
+  const finesses = finesseCount(chain);
+  const result: ConventionId[] = [];
+  if (chain.prompts > 1) result.push("multi-prompt");
+  if (finesses > 1) result.push("multi-finesse");
+  if (chain.prompts > 0 && finesses > 0) result.push("prompt-plus-finesse");
+  return result;
+}
+
 /**
  * Whether a clue can ask for `chain`: any number of cards that play anyway (`delayed-play-clue`),
- * plus one prompt or one finesse. With `multi-prompt`, any number of prompts and no finesse.
+ * plus one prompt or one finesse. Level 2 allows more: several prompts (`multi-prompt`), several
+ * finesses (`multi-finesse`), and prompts and finesses together (`prompt-plus-finesse`).
  */
-function allows({ uses }: ClueOnTable, { connections, prompts }: Chain): boolean {
-  const finesses = connections.filter(({ kind }) => kind === "finesse").length;
-  if (finesses + prompts <= 1) return true;
-  return finesses === 0 && uses("multi-prompt");
+function allows({ uses }: ClueOnTable, chain: Chain): boolean {
+  return combined(chain).every(uses);
 }
 
 /**
@@ -458,8 +469,10 @@ function allows({ uses }: ClueOnTable, { connections, prompts }: Chain): boolean
  *   `card`, other than the ones `chain` already prompts. If those cards were going to play anyway
  *   it is a delayed play clue, not a prompt.
  * - A finesse: a seat that plays after the giver and before the receiver has no such clued card
- *   (`prompts-before-finesses`), and `card` is playable now, so their finesse position blind-plays.
- *   Only the first card of a chain can be playable now, so a clue finesses one card at most.
+ *   (`prompts-before-finesses`), so their finesse position blind-plays. Either `card` is playable
+ *   now, or (level 2) it will be once the chain's prompts and finesses have played, and the seat
+ *   plays no earlier than the seats holding them. A seat finessed twice blind-plays its finesse
+ *   positions left to right.
  */
 function connectionsFor(
   read: ClueOnTable,
@@ -472,6 +485,7 @@ function connectionsFor(
   const prompted = new Set(
     chain.connections.flatMap(({ kind, ids }) => (kind === "prompt" ? [ids[0]!] : [])),
   );
+  const finessed = chain.connections.flatMap(({ kind, ids }) => (kind === "finesse" ? ids : []));
   // Once the chain has played, `card` is the card its suit needs next.
   const isNext = (other: Card) =>
     other.suit === card.suit ? other.rank === card.rank : facts.isNext(other);
@@ -492,8 +506,8 @@ function connectionsFor(
         conventions.push("prompts-before-finesses");
       }
       result.push({ connection: { kind: "prompt", seat, card, ids }, conventions });
-    } else if (beforeReceiver && uses("finesse") && isPlayable(moment, card)) {
-      const id = finessePosition(table, seat);
+    } else if (beforeReceiver && uses("finesse") && finesseFits(read, chain, seat, card)) {
+      const id = finessePosition({ ...table, finessed: [...table.finessed, ...finessed] }, seat);
       if (id === undefined) continue;
       result.push({
         connection: { kind: "finesse", seat, card, ids: [id] },
@@ -502,6 +516,22 @@ function connectionsFor(
     }
   }
   return result;
+}
+
+/**
+ * Whether `seat` can be finessed for `card` once `chain` has supplied the cards before it: `card`
+ * is playable now, or (level 2) the chain has a prompt or finesse that makes it playable, held by
+ * seats that play no later than `seat`, so `seat` blind-plays once those cards have played.
+ */
+function finesseFits(read: ClueOnTable, chain: Chain, seat: Seat, card: Card): boolean {
+  const { table, given, view, uses } = read;
+  if (isPlayable(table.moment, card)) return true;
+  if (!uses("multi-finesse") && !uses("prompt-plus-finesse")) return false;
+  if (chain.prompts + finesseCount(chain) === 0) return false;
+  const seats = seatsAfter(given.giver, view.config.numPlayers);
+  return chain.connections.every(
+    (connection) => seats.indexOf(connection.seat) <= seats.indexOf(seat),
+  );
 }
 
 /** Common knowledge after `reading`'s clue, on the table it was given on. */
@@ -538,6 +568,13 @@ function applyReading(view: PlayerView, table: Table, reading: ClueReading): Not
   return common;
 }
 
+/** The latest event, the turn it happened on, and the table just before it. */
+interface LastEvent {
+  readonly turn: number;
+  readonly event: GameEvent;
+  readonly before: Moment;
+}
+
 /**
  * Brings knowledge up to date after an event: settles common knowledge, rules out the
  * interpretations the table now contradicts, narrows each pending clue to what its remaining
@@ -547,7 +584,7 @@ function resolve(
   view: PlayerView,
   table: Table,
   readings: readonly PastReading[],
-  last: { turn: number; event: GameEvent },
+  last: LastEvent,
 ): { table: Table; readings: readonly PastReading[] } {
   type State = { table: Table; readings: readonly PastReading[] };
   const deduce = (state: State): State => {
@@ -565,22 +602,27 @@ function resolve(
 
 /**
  * Marks the interpretations `last` (the latest event) leaves impossible: the focus can no longer be
- * the card the interpretation says, a connecting card can no longer be anywhere it was promised, or
- * a finessed player took their turn without blind-playing the card (finesses are urgent). Returns
- * `readings` itself if nothing changed.
+ * the card the interpretation says, a connecting card can no longer be anywhere it was promised or
+ * was played from somewhere else, or a finessed player took their turn without blind-playing the
+ * card while it was playable (finesses are urgent). Returns `readings` itself if nothing changed.
  */
 function ruleOut(
   table: Table,
   readings: readonly PastReading[],
-  last: { turn: number; event: GameEvent },
+  last: LastEvent,
 ): readonly PastReading[] {
   const possible = (reading: PastReading, interpretation: Interpretation) =>
     interpretation.ruledOutOn !== null ||
     (couldBe(table.common[reading.focus]!, interpretation.focusIdentity) &&
       interpretation.connections.every((connection) => {
+        // The card played from somewhere it wasn't promised: someone else held it.
+        if (playedElsewhere(last.event, connection)) return false;
         if (hasPlayed(table.moment, connection.card)) return true;
         const acted = last.turn > reading.turn && last.event.seat === connection.seat;
-        if (connection.kind === "finesse" && acted) return false;
+        // A later finesse in a chain waits for the cards before it.
+        if (connection.kind === "finesse" && acted && isPlayable(last.before, connection.card)) {
+          return false;
+        }
         return connectingCards(table, connection).length > 0;
       }));
   const result = readings.map((reading) => {
@@ -596,6 +638,13 @@ function ruleOut(
   });
   return result.every((reading, i) => reading === readings[i]) ? readings : result;
 }
+
+/** Whether `event` played `connection`'s card from a card the connection didn't promise it on. */
+const playedElsewhere = (event: GameEvent, connection: Connection) =>
+  event.type === "play" &&
+  event.success &&
+  sameCard(event.card, connection.card) &&
+  !connection.ids.includes(event.cardId);
 
 /** The cards in `connection`'s hand that could still be its card, leftmost first. */
 export function connectingCards(
@@ -770,16 +819,7 @@ export function privateKnowledge(view: Sight, knowledge: Knowledge): Note[] {
     const notes = [...known];
     const read = new Set<CardId>();
     for (const reading of readings) {
-      const live = pending(reading).filter(
-        (interpretation) =>
-          could(reading.focus, interpretation.focusIdentity) &&
-          !twoSaveSeen(view, reading, interpretation) &&
-          interpretation.connections.every(
-            (connection) =>
-              hasPlayed(moment, connection.card) ||
-              connectingCards(knowledge, connection).some((id) => could(id, connection.card)),
-          ),
-      );
+      const live = fitting(view, knowledge, reading, known);
       if (live.length === 0) continue;
       narrowNote(
         notes,
@@ -819,6 +859,30 @@ function twoSaveSeen(view: Sight, reading: ClueReading, interpretation: Interpre
     const card = view.cards[id]!.card;
     return card !== null && sameCard(card, interpretation.focusIdentity);
   });
+}
+
+/**
+ * A reading's pending interpretations that fit `known` (what one player knows about each card):
+ * the focus can be the card the interpretation says, it isn't a 2 Save the viewer can tell the giver
+ * wouldn't give, and every connecting card can still be where it was promised.
+ */
+export function fitting(
+  view: Sight,
+  table: Pick<Table, "moment" | "common">,
+  reading: ClueReading,
+  known: readonly Note[],
+): Interpretation[] {
+  const could = (id: CardId, card: Card) => couldBe(known[id]!, card);
+  return pending(reading).filter(
+    (interpretation) =>
+      could(reading.focus, interpretation.focusIdentity) &&
+      !twoSaveSeen(view, reading, interpretation) &&
+      interpretation.connections.every(
+        (connection) =>
+          hasPlayed(table.moment, connection.card) ||
+          connectingCards(table, connection).some((id) => could(id, connection.card)),
+      ),
+  );
 }
 
 export type TableFacts = ReturnType<typeof tableFacts>;

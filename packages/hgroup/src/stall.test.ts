@@ -51,11 +51,14 @@ describe("the 5 Stall", () => {
 
   it("is not read once someone has discarded", () => {
     // Alice and Bob discard their chops, ending the Early Game, then Cathy clues Bob's b5 (now on
-    // slot 3). No 5 is playable, so the clue is off-convention rather than a stall.
+    // slot 3). It is a play clue on a 5 again: no 5 is playable, so it could only be a Quadruple
+    // Finesse on Alice (`multi-finesse`).
     const midGame = deal({ hands, clueTokens: 6 }).discard(4).discard(4).clue(BOB, 5);
     const reading = lastReading(midGame, CATHY, 2);
     expect(reading.focus).toBe(bobsFive);
-    expect(reading.interpretations).toEqual([]);
+    expect(reading.conventions).not.toContain("5-stall");
+    expect(focusCards(reading, "save")).toEqual([]);
+    expect(reading.interpretations.every((i) => i.connections.length === 4)).toBe(true);
   });
 
   it("is a permitted clue that doesn't hold off the end of the Early Game", () => {

@@ -277,7 +277,6 @@ type Finding =
  * decides the clue; the other findings add up.
  */
 const CLUE_CHECKS: readonly ((judge: Judge, clue: ClueCase) => Finding | undefined)[] = [
-  twoSaveVisibleRule,
   minimumClueValue,
   copiesOwnClued,
   badTouch,
@@ -305,12 +304,13 @@ function judgeClue(judge: Judge, given: Given): RankedMove {
   const kept = receiverKeeps(judge, after, given.target);
   if (real.length === 0 || !kept.some((interpretation) => real.includes(interpretation))) {
     const misread = uniqueNames(kept.length > 0 ? kept : live);
+    const text = `Cluing ${said} would be read as ${misread}, but the card is the ${name(focusCard)}.`;
+    // The receiver reads the Visible Rule into a 2 Save (`twoSaveSeen` in privateKnowledge).
+    const visible = real.some((interpretation) => interpretation.conventions.includes("2-save"));
     return verdict("violates", -30, [
-      reason(
-        null,
-        [reading.focus],
-        `Cluing ${said} would be read as ${misread}, but the card is the ${name(focusCard)}.`,
-      ),
+      visible
+        ? reason("2-save", [reading.focus], `${text} The other one is visible in another hand.`)
+        : reason(null, [reading.focus], text),
     ]);
   }
 
@@ -387,23 +387,6 @@ function clueValue(judge: Judge, clue: ClueCase): number {
   if (isPlayable(judge.knowledge.moment, clue.focusCard) && !clue.saving) score += 10;
   if (judge.view.clueTokens === 1) score -= 5;
   return score;
-}
-
-/** The 2 Save's Visible Rule: no 2 Save when the other copy is in someone else's hand, unless it
- * is on their chop too. */
-function twoSaveVisibleRule(judge: Judge, clue: ClueCase): Finding | undefined {
-  if (!clue.primary.conventions.includes("2-save")) return undefined;
-  const { knowledge, seen } = judge;
-  const isTwin = (id: CardId | null) => {
-    const card = id === null ? null : seen(id);
-    return card !== null && sameCard(card, clue.focusCard);
-  };
-  const twin = knowledge.moment.hands.findIndex(
-    (hand, seat) => seat !== clue.target && hand.some(isTwin),
-  );
-  if (twin === -1 || isTwin(chop(knowledge, twin))) return undefined;
-  const text = `The other ${name(clue.focusCard)} is visible in another hand, so it can't be 2 Saved.`;
-  return { violates: -5, reason: reason("2-save", [clue.focus], text) };
 }
 
 /** Minimum Clue Value: every clue gets at least one new card played or saved. */

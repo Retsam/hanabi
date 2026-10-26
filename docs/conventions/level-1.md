@@ -95,8 +95,9 @@ If every interpretation is ruled out, a teammate broke a convention: the cards k
   [level 1](https://hanabi.github.io/level-1#the-2-save).
 - **Reading:** a 2 clue focused on chop is a save on any 2 that is not trash ("It can be any 2 in the
   game").
-- **Judgment call:** the Visible Rule (no 2 Save on a 2 visible in another hand) limits the clue giver.
-  The receiver does not use it to narrow the 2; the move ranking will enforce it for the giver.
+- **Judgment call:** the Visible Rule (no 2 Save on a 2 visible in another hand) limits the clue giver,
+  and every player who sees that other copy uses it to narrow the 2. See
+  [the Visible Rule](#2-save-the-visible-rule) below.
 
 ## `critical-save`
 
@@ -265,6 +266,12 @@ category, then score, then a fixed order: plays, discards, then clues by seat an
 ## `2-save`: the Visible Rule
 
 - **Source:** [level 1](https://hanabi.github.io/level-1#the-visible-rule).
-- **Ranking:** a 2 Save on a 2 whose other copy is visible in another hand violates the conventions,
-  unless that copy is on its holder's chop too (Double Chop 2's). The reading is unchanged: the receiver
-  can't see their own 2, so they read the clue the same way.
+- **Reading:** the giver won't 2 Save a 2 whose other copy they can see in a hand other than the
+  receiver's, unless that copy is on its holder's chop too (Double Chop 2's). So a player who sees
+  such a copy, as it was when the clue was given, rules out a 2 Save on that 2. The table can't see
+  every hand, so common knowledge keeps it; each player narrows it privately.
+- **Judgment call:** the receiver used to read a 2 Save on any 2 regardless; Retsam ruled
+  (2026-10-26) that the receiver may use the Visible Rule, after a game where Alice saw both b2s and
+  an off-chop r2, so her 2-saved card was a playable y2, g2 or p2.
+- **Ranking:** a 2 Save on a 2 whose other copy is visible in another hand violates the conventions:
+  the receiver sees that copy, so they would misread the clue.

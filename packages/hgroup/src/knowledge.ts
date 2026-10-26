@@ -85,6 +85,11 @@ export interface ClueReading extends GivenClue {
    * see them, so a save may copy one (`mayCopy`).
    */
   readonly giverClued: readonly CardId[];
+  /**
+   * The cards the giver saw off their holder's chop, in hands other than the target's, when the clue
+   * was given. By the Visible Rule a 2 Save is never on a copy of one (`twoSaveSeen`).
+   */
+  readonly giverSawOffChop: readonly CardId[];
   /** The card the clue is about. See `clue-focus`. */
   readonly focus: CardId;
   /**
@@ -256,7 +261,19 @@ export function readClue(view: PlayerView, table: Table, given: GivenClue): Clue
   const uses = (convention: ConventionId) => applies(convention, table.level);
   const focus = clueFocus(table, given);
   const giverClued = table.moment.hands[given.giver]!.filter((id) => countsAsClued(table, id));
-  const offConvention = { ...given, giverClued, focus, interpretations: [], conventions: [] };
+  const giverSawOffChop = table.moment.hands.flatMap((hand, seat) =>
+    seat === given.giver || seat === given.target
+      ? []
+      : hand.filter((id) => id !== chop(table, seat)),
+  );
+  const offConvention = {
+    ...given,
+    giverClued,
+    giverSawOffChop,
+    focus,
+    interpretations: [],
+    conventions: [],
+  };
   if (!uses("clue-focus") || !uses("play-clue")) return offConvention;
 
   const read: ClueOnTable = {
@@ -286,7 +303,7 @@ export function readClue(view: PlayerView, table: Table, given: GivenClue): Clue
   ]);
   const othersTouched = given.touched.some((id) => id !== focus && !countsAsClued(table, id));
   if (othersTouched && uses("good-touch")) conventions.push("good-touch");
-  return { ...given, giverClued, focus, interpretations, conventions };
+  return { ...given, giverClued, giverSawOffChop, focus, interpretations, conventions };
 }
 
 /** A clue being read: the table it is given on, its focus, and what the focus could be. */
@@ -749,6 +766,7 @@ export function privateKnowledge(view: Sight, knowledge: Knowledge): Note[] {
       const live = pending(reading).filter(
         (interpretation) =>
           could(reading.focus, interpretation.focusIdentity) &&
+          !twoSaveSeen(view, reading, interpretation) &&
           interpretation.connections.every(
             (connection) =>
               hasPlayed(moment, connection.card) ||
@@ -766,6 +784,19 @@ export function privateKnowledge(view: Sight, knowledge: Knowledge): Note[] {
     return fallBack(possibilities(view, (id) => notes[id]!));
   };
   return fixpoint(fallBack(goodTouched), applyReadings, sameSizes);
+}
+
+/**
+ * Whether the viewer can tell `interpretation` is a 2 Save the giver wouldn't give: by the Visible
+ * Rule, they saw the other copy off its holder's chop (`2-save`). The table can't see every hand, so
+ * only a player who sees that copy rules it out.
+ */
+function twoSaveSeen(view: Sight, reading: ClueReading, interpretation: Interpretation): boolean {
+  if (!interpretation.conventions.includes("2-save")) return false;
+  return reading.giverSawOffChop.some((id) => {
+    const card = view.cards[id]!.card;
+    return card !== null && sameCard(card, interpretation.focusIdentity);
+  });
 }
 
 export type TableFacts = ReturnType<typeof tableFacts>;

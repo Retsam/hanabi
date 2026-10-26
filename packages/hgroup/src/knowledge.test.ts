@@ -169,6 +169,39 @@ describe("save clues", () => {
     expect(lastReading(game, BOB)).toMatchObject({ play: [], save: ["r2", "y2", "b2", "p2"] });
   });
 
+  // level-1#the-visible-rule: Bob saw Cathy's r2, off her chop, so his 2 Save isn't on a red 2.
+  it("let a player who sees the other copy rule a 2 Save on it out", () => {
+    const game = deal({
+      hands: [
+        ["r3", "r4", "g4", "y4", "p2"],
+        ["b4", "g3", "b3", "y4", "r4"],
+        ["g4", "r2", "p4", "y3", "g5"],
+      ],
+      stacks: { yellow: 1, green: 1, blue: 2, purple: 1 },
+    })
+      .clue(CATHY, 5)
+      .clue(ALICE, 2);
+    const alices2 = game.cardAt(4, ALICE);
+    // The table can't see every hand, so common knowledge keeps the red 2.
+    expect(common(game, ALICE, alices2)).toEqual(["r2", "y2", "g2", "p2"]);
+    expect(own(game, ALICE, alices2)).toEqual(["y2", "g2", "p2"]);
+  });
+
+  // level-1#the-visible-rule, Double Chop 2's: a 2 on its holder's chop could be saved by either clue.
+  it("keep a 2 Save on a 2 whose other copy is on its holder's chop", () => {
+    const game = deal({
+      hands: [
+        ["r3", "r4", "g4", "y4", "p2"],
+        ["b4", "g3", "b3", "y4", "r4"],
+        ["g4", "p4", "y3", "r2", "g5"],
+      ],
+      stacks: { yellow: 1, green: 1, blue: 2, purple: 1 },
+    })
+      .clue(CATHY, 5)
+      .clue(ALICE, 2);
+    expect(own(game, ALICE, game.cardAt(4, ALICE))).toEqual(["r2", "y2", "g2", "p2"]);
+  });
+
   // beginner/critical-save: blue on chop is a play clue on b2 or a critical save on b4.
   it("read a color clue on chop as a play clue or a Critical Save", () => {
     const game = deal({

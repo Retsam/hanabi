@@ -326,6 +326,28 @@ describe("privateKnowledge", () => {
     }).clue(BOB, "yellow");
     expect(own(game, ALICE, game.cardAt(4, ALICE))).not.toContain("y2");
   });
+
+  it("keeps the focus's reading over a Good Touch guess about another touched card", () => {
+    // Alice's blue clue touches Cathy's b3 (the focus) and trash b2. The table reads the focus as
+    // b3, or b4 through a prompt on Bob's clued blue card, and Good Touch makes the b2 one of those
+    // too. Cathy sees Bob's card is the b4, so her focus is the last b3 and the other blue card is
+    // bad touched, not the b3.
+    const game = deal({
+      hands: [
+        ["r3", "y3", "g3", "p3", "y4"],
+        ["g4", "b*4", "r4", "p4", "y5"],
+        ["b3", "g5", "b2", "r5", "p5"],
+      ],
+      stacks: { blue: 2 },
+      discardPile: ["b3", "b5"],
+    }).clue(CATHY, "blue");
+    const focus = game.cardAt(0, CATHY);
+    const other = game.cardAt(2, CATHY);
+    expect(common(game, CATHY, focus)).toEqual(["b3", "b4"]);
+    expect(common(game, CATHY, other)).toEqual(["b3", "b4"]);
+    expect(own(game, CATHY, focus)).toEqual(["b3"]);
+    expect(own(game, CATHY, other)).toEqual(["b1", "b2", "b4"]);
+  });
 });
 
 describe("readGame over random games", { timeout: 60_000 }, () => {

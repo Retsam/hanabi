@@ -12,5 +12,13 @@
     "typescript/no-unnecessary-condition": "error",
     "typescript/no-floating-promises": "error",
     "vitest/expect-expect": ["error", { "assertFunctionNames": ["expect", "expectForAllGames"] }]
-  }
+  },
+  "overrides": [
+    {
+      "files": ["**/*.test.ts", "**/*.test.tsx"],
+      "rules": {
+        "unicorn/consistent-function-scoping": "off"
+      }
+    }
+  ]
 }

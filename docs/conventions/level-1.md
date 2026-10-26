@@ -31,7 +31,9 @@ interpretations allow. An interpretation is ruled out when:
   out);
 - no card can still be its connecting card: a prompted player's candidates have all turned out to be
   other cards;
-- its finessed player took their turn without blind-playing the card (finesses are urgent).
+- its connecting card was played from a card it wasn't promised on: another player held it;
+- its finessed player took their turn without blind-playing the card while it was playable (finesses
+  are urgent).
 
 If every interpretation is ruled out, a teammate broke a convention: the cards keep what they had.
 

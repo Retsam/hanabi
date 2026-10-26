@@ -300,17 +300,26 @@ function judgeClue(judge: Judge, given: Given): RankedMove {
     ]);
   }
   const focusCard = judge.seen(reading.focus)!;
-  const real = live.filter((interpretation) => isReal(judge, interpretation, focusCard));
+  // Connections are found among the cards as the clue leaves them: it can rule some out.
+  const real = live.filter((interpretation) => isReal(judge, after, interpretation, focusCard));
   const kept = receiverKeeps(judge, after, given.target);
   if (real.length === 0 || !kept.some((interpretation) => real.includes(interpretation))) {
-    const misread = uniqueNames(kept.length > 0 ? kept : live);
-    const text = `Cluing ${said} would be read as ${misread}, but the card is the ${name(focusCard)}.`;
+    const misread = kept.length > 0 ? kept : live;
+    // Name what goes wrong in the reading of the true focus, prompts first as the receiver reads them.
+    const wrong = misread
+      .filter((interpretation) => sameCard(interpretation.focusIdentity, focusCard))
+      .toSorted((a, b) => finesses(a) - finesses(b))
+      .map((interpretation) => wrongConnection(judge, after, interpretation))
+      .find((found) => found !== undefined);
+    const text = `Cluing ${said} would be read as ${uniqueNames(misread)}, but ${
+      wrong?.text ?? `the card is the ${name(focusCard)}`
+    }.`;
     // The receiver reads the Visible Rule into a 2 Save (`twoSaveSeen` in privateKnowledge).
     const visible = real.some((interpretation) => interpretation.conventions.includes("2-save"));
     return verdict("violates", -30, [
       visible
         ? reason("2-save", [reading.focus], `${text} The other one is visible in another hand.`)
-        : reason(null, [reading.focus], text),
+        : reason(null, [reading.focus, ...(wrong?.cards ?? [])], text),
     ]);
   }
 
@@ -456,19 +465,54 @@ function playOverSave(judge: Judge, clue: ClueCase): Finding | undefined {
 }
 
 /**
- * Whether `interpretation` is the truth as the viewer sees it: the focus is the card it says, and
- * every connecting card is where it says (the leftmost candidate, for a prompt).
+ * Whether `interpretation` is the truth as the viewer sees it, once the clue is given (`after`): the
+ * focus is the card it says, and every connecting card is where it says (the leftmost candidate,
+ * for a prompt).
  */
-function isReal(judge: Judge, interpretation: Interpretation, focusCard: Card): boolean {
-  const { knowledge, seen } = judge;
-  if (!sameCard(interpretation.focusIdentity, focusCard)) return false;
-  return interpretation.connections.every((connection) => {
-    if (hasPlayed(knowledge.moment, connection.card)) return true;
-    const id = connectingCards(knowledge, connection)[0];
-    const card = id === undefined ? null : seen(id);
-    return card !== null && sameCard(card, connection.card);
-  });
+function isReal(
+  judge: Judge,
+  after: Knowledge,
+  interpretation: Interpretation,
+  focusCard: Card,
+): boolean {
+  return (
+    sameCard(interpretation.focusIdentity, focusCard) &&
+    wrongConnection(judge, after, interpretation) === undefined
+  );
 }
+
+/** The first of `interpretation`'s connections that isn't where it says, described for a reason. */
+function wrongConnection(
+  judge: Judge,
+  after: Knowledge,
+  interpretation: Interpretation,
+): { text: string; cards: CardId[] } | undefined {
+  for (const connection of interpretation.connections) {
+    if (hasPlayed(after.moment, connection.card)) continue;
+    const id = connectingCards(after, connection)[0];
+    const { kind, seat } = connection;
+    if (id === undefined) {
+      return {
+        text: `seat ${seat} has no card the ${kind} could play as the ${name(connection.card)}`,
+        cards: [],
+      };
+    }
+    const card = judge.seen(id);
+    if (card === null) {
+      return {
+        text: `the ${kind} would get seat ${seat} to play a card that may not be the ${name(connection.card)}`,
+        cards: [id],
+      };
+    }
+    if (!sameCard(card, connection.card)) {
+      return { text: `the ${kind} would get seat ${seat} to play the ${name(card)}`, cards: [id] };
+    }
+  }
+  return undefined;
+}
+
+const finesses = (interpretation: Interpretation) =>
+  interpretation.connections.filter((connection) => connection.kind === "finesse").length;
 
 const uniqueNames = (interpretations: readonly Interpretation[]) =>
   uniqBy(

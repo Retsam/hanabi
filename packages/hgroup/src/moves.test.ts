@@ -266,6 +266,39 @@ describe("clues", () => {
     );
   });
 
+  // Cathy's clued 2s are the y2 and g2. Green touches the g2 as well as the g3, which rules the y2
+  // out of the prompt: Cathy plays the g2, then the g3.
+  const twos = deal({
+    hands: [
+      ["r4", "b3", "p3", "y4", "r5"],
+      ["y5", "b4", "p4", "r4", "b5"],
+      ["p4", "y2*", "g2*", "g3", "b4"],
+    ],
+    stacks: { red: 1, yellow: 1, green: 1, blue: 1, purple: 1 },
+  });
+
+  it("find prompts among the cards the clue leaves", () => {
+    const move = judged(twos, {
+      type: "clue",
+      target: CATHY,
+      clue: { kind: "color", value: "green" },
+    });
+    expect(move.category).toBe("permitted");
+    expect(conventions(move)).toEqual(["prompt"]);
+  });
+
+  it("name the connection that would go wrong when the focus would be read right", () => {
+    // Number 3 leaves both 2s as the prompt for the g3, and Cathy would play the leftmost, the y2.
+    const move = judged(twos, { type: "clue", target: CATHY, clue: { kind: "rank", value: 3 } });
+    expect(move.category).toBe("violates");
+    expect(move.reasons[0]).toMatchObject({
+      cards: [twos.cardAt(3, CATHY), twos.cardAt(1, CATHY)],
+      text:
+        "Cluing number 3 to seat 2 would be read as the red 3 or the yellow 3 or the green 3 or the " +
+        "blue 3 or the purple 3, but the prompt would get seat 2 to play the yellow 2.",
+    });
+  });
+
   // beginner/minimum-clue-value-principle, the Tempo Clue: re-cluing Bob's 2-saved r2 gets no new card.
   it("violate Minimum Clue Value when they get no new card", () => {
     const game = deal({

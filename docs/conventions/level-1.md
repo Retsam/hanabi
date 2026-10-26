@@ -111,7 +111,11 @@ If every interpretation is ruled out, a teammate broke a convention: the cards k
 - **Source:** [beginner/good-touch-principle](https://hanabi.github.io/beginner/good-touch-principle),
   [beginner/save-principle](https://hanabi.github.io/beginner/save-principle).
 - **Reading:** every other newly touched card will play one day. It is no card that is trash (already
-  played, unreachable, or already clued elsewhere), and not the focus's card if the focus is known.
+  played, unreachable, or already clued elsewhere), and not the focus's card if every reading of the
+  clue agrees what that is.
+- **Judgment call:** the focus's reading comes before Good Touch. If the only card another touched card
+  could be that isn't trash is the focus's card, that card is bad touched, not a reason to read the
+  focus as something else.
 - **Afterwards:** a clued card is never a card that has since been played, and no two clued cards are
   the same card. This is how the site's purple example pins down a purple 5. The exception is a clue
   that may be a save (see `save-principle`).

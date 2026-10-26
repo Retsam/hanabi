@@ -509,7 +509,10 @@ function applyReading(view: PlayerView, table: Table, reading: ClueReading): Not
   const { moment, level } = table;
   const common = [...table.common];
   const facts = tableFacts(view, table);
-  const means = focusCards(reading).length > 0;
+  const focusIdentities = focusCards(reading);
+  const means = focusIdentities.length > 0;
+  // The card the focus is under every interpretation, if they agree.
+  const focusIdentity = identity(focusIdentities);
 
   for (const id of moment.hands[reading.target]!) {
     const before = common[id]!;
@@ -526,8 +529,11 @@ function applyReading(view: PlayerView, table: Table, reading: ClueReading): Not
     // reading settles (`resolve`).
     const goodTouch =
       id !== reading.focus && !isClued(moment, id) && means && applies("good-touch", level);
-    // Good Touch: a newly touched card will play one day, so it is not trash.
-    common[id] = goodTouch ? narrowed(touched, (card) => !facts.isTrash(card, id)) : touched;
+    // Good Touch: a newly touched card will play one day, so it is not trash, and not the focus's
+    // card. The focus's reading comes first: if that leaves nothing, the card is bad touched.
+    const willPlay = (card: Card) =>
+      !facts.isTrash(card, id) && !(focusIdentity && sameCard(focusIdentity, card));
+    common[id] = goodTouch ? narrowed(touched, willPlay) : touched;
   }
   return common;
 }

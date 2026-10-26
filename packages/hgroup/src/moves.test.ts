@@ -160,6 +160,25 @@ describe("plays", () => {
       score: 100,
     });
   });
+
+  it("follow a clue's focus over a Good Touch guess about the other touched card", () => {
+    // Alice's 5 clue is a play clue on Bob's y5. Good Touch would make his other 5 (the trash g5)
+    // the y5, but the focus comes first: Bob plays the focus, not the other 5.
+    const game = deal({
+      hands: [
+        ["r3", "y3", "b3", "p3", "r4"],
+        ["b4", "y5", "g5", "r2", "p2"],
+        ["r1", "b1", "g4", "p4", "y4"],
+      ],
+      stacks: { red: 5, yellow: 4, green: 2, blue: 5, purple: 5 },
+      discardPile: ["g3", "g3"],
+    }).clue(BOB, 5);
+    expect(ranked(game)[0]).toMatchObject({
+      action: { type: "play", cardId: game.cardAt(1, BOB) },
+      category: "permitted",
+    });
+    expect(judged(game, { type: "play", cardId: game.cardAt(2, BOB) }).category).toBe("violates");
+  });
 });
 
 describe("discards", () => {

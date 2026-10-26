@@ -279,6 +279,24 @@ describe("Good Touch", () => {
     expect(common(game, ALICE, game.cardAt(3, ALICE))).toEqual(["p5"]);
   });
 
+  it("leaves the other touched card bad touched when only the focus's card would be good", () => {
+    // Alice's 5 clue touches Bob's y5 (the focus) and g5, trash since both g3s are gone. The other
+    // 5's have played, so Good Touch alone would make the g5 the y5, leaving the focus only the trash
+    // g5. The focus's reading comes first: it is the y5, and the other 5 is bad touched.
+    const game = deal({
+      hands: [
+        ["r3", "y3", "b3", "p3", "r4"],
+        ["b4", "y5", "g5", "r2", "p2"],
+        ["r1", "b1", "g4", "p4", "y4"],
+      ],
+      stacks: { red: 5, yellow: 4, green: 2, blue: 5, purple: 5 },
+      discardPile: ["g3", "g3"],
+    }).clue(BOB, 5);
+    expect(lastReading(game, ALICE).play).toEqual(["y5"]);
+    expect(common(game, BOB, game.cardAt(1, BOB))).toEqual(["y5"]);
+    expect(common(game, BOB, game.cardAt(2, BOB))).toEqual(["g5"]);
+  });
+
   it("is off at level 0, where clues carry only rules-level information", () => {
     const game = deal({
       hands: [

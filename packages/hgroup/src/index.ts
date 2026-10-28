@@ -8,7 +8,13 @@ export {
   sameCard,
   type Sight,
 } from "./possibilities.ts";
-export { applies, CONVENTION_LEVELS, type ConventionId, type Level } from "./conventions.ts";
+export {
+  applies,
+  CONVENTION_LEVELS,
+  type ConventionId,
+  type Level,
+  MAX_LEVEL,
+} from "./conventions.ts";
 export {
   advance,
   chop,
@@ -26,4 +32,4 @@ export {
   type Table,
 } from "./knowledge.ts";
 export { type Category, rankMoves, type RankedMove, type Reason } from "./moves.ts";
-export { reviewGame, reviewMove, type TurnReview } from "./review.ts";
+export { reviewGame, reviewMove, sameAction, type TurnReview } from "./review.ts";

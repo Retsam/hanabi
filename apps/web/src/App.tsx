@@ -1,5 +1,5 @@
 import { type Action, maxScore, playerView, replay as replayGame, score } from "@hanabi/engine";
-import { CONVENTION_LEVELS, type Level } from "@hanabi/hgroup";
+import { type Level, MAX_LEVEL } from "@hanabi/hgroup";
 import { useEffect, useRef, useState } from "react";
 import { clearGame, loadGame, loadLevel, type SavedGame, saveGame, saveLevel } from "./saved.ts";
 import {
@@ -14,10 +14,7 @@ import { Table } from "./Table.tsx";
 
 const PLAYER_COUNTS: readonly PlayerCount[] = [2, 3, 4, 5];
 /** Every level up to the highest one the H-Group engine has a convention for. */
-const LEVELS: readonly Level[] = Array.from(
-  { length: Math.max(...Object.values(CONVENTION_LEVELS)) },
-  (_, i) => i + 1,
-);
+const LEVELS: readonly Level[] = Array.from({ length: MAX_LEVEL }, (_, i) => i + 1);
 const randomSeed = () => Math.floor(Math.random() * 1_000_000);
 
 /** A game to play: new from its options, or resumed from a saved record. */

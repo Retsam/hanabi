@@ -12,6 +12,7 @@
   --blue: #2f6fd6;
   --purple: #8a4fbf;
   --orange: #d9822b;
+  --teal: #168a80;
   --unknown: #8d8778;
   font-family: system-ui, sans-serif;
 }
@@ -467,6 +468,23 @@ h2 {
 
 .moves-help button {
   margin-top: 10px;
+}
+
+/* Marks a move where the next level up would pick differently. */
+.preview-mark {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 4px;
+  border: 1px solid var(--teal);
+  border-radius: 4px;
+  color: var(--teal);
+  font-size: 0.7rem;
+  font-weight: 600;
+  vertical-align: 1px;
+}
+
+.verdict .preview .preview-mark {
+  margin-left: 0;
 }
 
 .turn-list .selected button {

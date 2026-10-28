@@ -1,6 +1,7 @@
 // The game in progress, kept in the browser's localStorage so a reload resumes it. Only the options
 // and the replay record are stored; the state is rebuilt by replaying the record's actions.
 import { type Replay, replay } from "@hanabi/engine";
+import type { Level } from "@hanabi/hgroup";
 import type { SessionOptions } from "./session.ts";
 
 export interface SavedGame {
@@ -42,6 +43,25 @@ export function saveGame(game: SavedGame, storage: GameStorage | null = browserS
 
 export function clearGame(storage: GameStorage | null = browserStorage()): void {
   attempt(() => storage?.removeItem(KEY));
+}
+
+/**
+ * The level last picked on the setup screen. Unlike the game, it isn't scoped to the page's path:
+ * a level is a preference, not something that must replay.
+ */
+const LEVEL_KEY = "hanabi.level";
+
+/** The level last picked, if it is one of `levels`; otherwise null. */
+export function loadLevel(
+  levels: readonly Level[],
+  storage: GameStorage | null = browserStorage(),
+): Level | null {
+  const level = Number(attempt(() => storage?.getItem(LEVEL_KEY)) ?? Number.NaN);
+  return levels.includes(level) ? level : null;
+}
+
+export function saveLevel(level: Level, storage: GameStorage | null = browserStorage()): void {
+  attempt(() => storage?.setItem(LEVEL_KEY, String(level)));
 }
 
 /** Whether a parsed save is from this version. Its record is checked by replaying it. */

@@ -1,7 +1,15 @@
 import { createGame, shuffledDeck, standardConfig } from "@hanabi/engine";
 import { xoroshiro128plus } from "pure-rand/generator/xoroshiro128plus";
 import { describe, expect, it } from "vitest";
-import { clearGame, type GameStorage, loadGame, type SavedGame, saveGame } from "./saved.ts";
+import {
+  clearGame,
+  type GameStorage,
+  loadGame,
+  loadLevel,
+  type SavedGame,
+  saveGame,
+  saveLevel,
+} from "./saved.ts";
 
 const ALICE = 0;
 
@@ -71,5 +79,27 @@ describe("saved games", () => {
       expect(() => saveGame(game, storage)).not.toThrow();
       expect(loadGame(storage)).toBeNull();
     }
+  });
+});
+
+describe("saved level", () => {
+  it("loads the level last picked", () => {
+    const storage = memoryStorage();
+    expect(loadLevel([1, 2], storage)).toBeNull();
+    saveLevel(2, storage);
+    expect(loadLevel([1, 2], storage)).toBe(2);
+  });
+
+  it("ignores a level that isn't offered", () => {
+    const storage = memoryStorage();
+    saveLevel(3, storage);
+    expect(loadLevel([1, 2], storage)).toBeNull();
+    storage.setItem("hanabi.level", "x");
+    expect(loadLevel([1, 2], storage)).toBeNull();
+  });
+
+  it("does nothing without storage", () => {
+    expect(() => saveLevel(2, null)).not.toThrow();
+    expect(loadLevel([1, 2], null)).toBeNull();
   });
 });

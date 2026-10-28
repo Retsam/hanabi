@@ -271,8 +271,7 @@ describe("chains of connections", () => {
       names(read(doublePrompt, ALICE, 1).readings[0]!.interpretations.map((i) => i.focusIdentity)),
     ).toEqual(["g5"]);
     const reading = read(doublePrompt, ALICE, 2).readings[0]!;
-    const [yellow] = reading.interpretations;
-    expect(names([yellow!.focusIdentity])).toEqual(["y5"]);
+    const yellow = reading.interpretations.find((i) => i.focusIdentity.suit === "yellow");
     expect(yellow!.conventions).toEqual(expect.arrayContaining(["prompt", "multi-prompt"]));
     expect(yellow!.connections).toEqual([
       {
@@ -288,7 +287,14 @@ describe("chains of connections", () => {
         ids: [doublePrompt.cardAt(2, BOB)],
       },
     ]);
-    expect(names(reading.interpretations.map((i) => i.focusIdentity))).toEqual(["y5", "g5"]);
+    // Bob's two unclued cards could also be a Double Finesse on any other 5 (`multi-finesse`).
+    expect(names(reading.interpretations.map((i) => i.focusIdentity))).toEqual([
+      "r5",
+      "y5",
+      "g5",
+      "b5",
+      "p5",
+    ]);
   });
 
   it("tell the prompted player to play their cards left to right", () => {
@@ -301,12 +307,202 @@ describe("chains of connections", () => {
       action: { type: "play", cardId: doublePrompt.cardAt(1, BOB) },
       category: "mandated",
     });
-    expect(names(read(doublePrompt, CATHY, 2).common[cathysFive]!)).toEqual(["y5", "g5"]);
+    // Cathy sees Bob's finesse positions hold no 3 or 4, so only the prompt or a direct play is left.
+    const cathy = privateKnowledge(
+      playerView(doublePrompt.state, CATHY),
+      read(doublePrompt, CATHY, 2),
+    );
+    expect(names(cathy[cathysFive]!)).toEqual(["y5", "g5"]);
     // Once the y3 has played, the y4 is owed next.
     const later = doublePrompt.play(1).discard(4).discard(4);
     expect(rankMoves(playerView(later.state, BOB), 2)[0]).toMatchObject({
       action: { type: "play", cardId: doublePrompt.cardAt(2, BOB) },
       category: "mandated",
     });
+  });
+});
+
+describe("finesse chains (level 2)", () => {
+  /** The top-ranked move for whoever is to play, at level 2. */
+  const top = (game: ReturnType<typeof deal>) =>
+    rankMoves(playerView(game.state, game.state.currentPlayer), 2)[0]!;
+  const playOf = (id: number) => ({ type: "play", cardId: id });
+  /** How the player to move would judge playing `id`, at level 2. */
+  const playing = (game: ReturnType<typeof deal>, id: number) =>
+    rankMoves(playerView(game.state, game.state.currentPlayer), 2).find(
+      ({ action }) => action.type === "play" && action.cardId === id,
+    )!;
+
+  // level-2#the-double-finesse, first example: Alice's red clue on Donald's r4 finesses Bob's r2
+  // and then Cathy's r3.
+  const acrossPlayers = deal({
+    hands: [
+      ["y3", "g3", "b3", "p3"],
+      ["r2", "g4", "b4", "p4"],
+      ["r3", "y4", "g4", "b4"],
+      ["y5", "r4", "p4", "g5"],
+    ],
+    stacks: { red: 1, yellow: 0, green: 0, blue: 0, purple: 0 },
+  }).clue(DONALD, "red");
+  const donaldsRed = acrossPlayers.cardAt(1, DONALD);
+
+  it("read a clue two away from playable as a Double Finesse on two players", () => {
+    const focusNames = (level: number) =>
+      names(
+        read(acrossPlayers, ALICE, level).readings[0]!.interpretations.map((i) => i.focusIdentity),
+      );
+    // At level 1 the focus can be the r2, or the r3 with a finesse on Bob or on Cathy.
+    expect(focusNames(1)).toEqual(["r2", "r3", "r3"]);
+    expect(focusNames(2)).toEqual(expect.arrayContaining(["r4"]));
+    const double = read(acrossPlayers, ALICE, 2).readings[0]!.interpretations.find(
+      ({ focusIdentity, connections }) =>
+        focusIdentity.rank === 4 && connections[1]?.seat === CATHY,
+    )!;
+    expect(double.conventions).toContain("multi-finesse");
+    expect(double.connections).toEqual([
+      {
+        kind: "finesse",
+        seat: BOB,
+        card: { suit: "red", rank: 2 },
+        ids: [acrossPlayers.cardAt(0, BOB)],
+      },
+      {
+        kind: "finesse",
+        seat: CATHY,
+        card: { suit: "red", rank: 3 },
+        ids: [acrossPlayers.cardAt(0, CATHY)],
+      },
+    ]);
+  });
+
+  it("have each finessed player blind-play in turn", () => {
+    expect(top(acrossPlayers)).toMatchObject({
+      action: playOf(acrossPlayers.cardAt(0, BOB)),
+      category: "mandated",
+    });
+    const bobPlayed = acrossPlayers.play(0);
+    expect(playing(bobPlayed, acrossPlayers.cardAt(0, CATHY))).toMatchObject({
+      category: "mandated",
+      reasons: [{ convention: "finesse" }],
+    });
+    const cathyPlayed = bobPlayed.play(0);
+    // Cathy could be finessed again for an r4, but Donald sees her next card is not one.
+    const donald = privateKnowledge(
+      playerView(cathyPlayed.state, DONALD),
+      read(cathyPlayed, DONALD, 2),
+    );
+    expect(names(donald[donaldsRed]!)).toEqual(["r4"]);
+  });
+
+  // level-2#the-double-finesse, second example: Bob is finessed twice, and Cathy waits a turn
+  // because she saw the r2 next to Bob's r1.
+  const sameHand = deal({
+    hands: [
+      ["y4", "g4", "b4", "p4", "y3"],
+      ["r1", "r2", "g3", "b3", "p3"],
+      ["g2", "b2", "r3", "p2", "y2"],
+    ],
+    clueTokens: 6,
+  }).clue(CATHY, "red");
+  const cathysRed = sameHand.cardAt(2, CATHY);
+
+  it("can blind-play two cards from one hand, left to right", () => {
+    const double = read(sameHand, ALICE, 2).readings[0]!.interpretations.find(
+      (i) => i.focusIdentity.rank === 3,
+    )!;
+    expect(double.connections.map(({ seat, ids }) => [seat, ids])).toEqual([
+      [BOB, [sameHand.cardAt(0, BOB)]],
+      [BOB, [sameHand.cardAt(1, BOB)]],
+    ]);
+    expect(top(sameHand)).toMatchObject({ action: playOf(sameHand.cardAt(0, BOB)) });
+
+    const bobPlayed = sameHand.play(0);
+    const cathy = privateKnowledge(playerView(bobPlayed.state, CATHY), read(bobPlayed, CATHY, 2));
+    expect(names(cathy[cathysRed]!)).toEqual(["r2", "r3"]);
+    expect(top(bobPlayed).action).not.toEqual(playOf(cathysRed));
+
+    // Cathy and Alice discard; the r2 is now on Bob's slot 2, and he blind-plays it.
+    const cathyWaited = bobPlayed.discard(4).discard(4);
+    expect(top(cathyWaited)).toMatchObject({
+      action: playOf(sameHand.cardAt(1, BOB)),
+      category: "mandated",
+    });
+    // Bob could be finessed a third time, but Cathy sees his next card is not the r4.
+    const bobPlayedAgain = cathyWaited.play(1);
+    const after = privateKnowledge(
+      playerView(bobPlayedAgain.state, CATHY),
+      read(bobPlayedAgain, CATHY, 2),
+    );
+    expect(names(after[cathysRed]!)).toEqual(["r3"]);
+  });
+
+  it("are ruled out when the second finessed card is not there", () => {
+    // Bob's slot 2 is not the r2, so Cathy's red card is.
+    const single = deal({
+      hands: [
+        ["y4", "g4", "b4", "p4", "y3"],
+        ["r1", "g3", "r3", "b3", "p3"],
+        ["g2", "b2", "r2", "p2", "y2"],
+      ],
+      clueTokens: 6,
+    })
+      .clue(CATHY, "red")
+      .play(0);
+    const red = single.cardAt(2, CATHY);
+    const cathy = privateKnowledge(playerView(single.state, CATHY), read(single, CATHY, 2));
+    expect(names(cathy[red]!)).toEqual(["r2"]);
+    expect(top(single)).toMatchObject({ action: playOf(red) });
+  });
+
+  // level-2#the-prompt--finesse: Bob's clued red card is prompted as the r2, then his finesse
+  // position blind-plays as the r3.
+  const promptFinesse = deal({
+    hands: [
+      ["y3", "g3", "b3", "p3", "y4"],
+      ["r3", "g4", "b4", "r*2", "p4"],
+      ["g5", "r4", "b5", "p5", "y5"],
+    ],
+    stacks: { red: 1, yellow: 0, green: 0, blue: 0, purple: 0 },
+    clueTokens: 6,
+  }).clue(CATHY, "red");
+  const cathysFour = promptFinesse.cardAt(1, CATHY);
+
+  it("read a Prompt + Finesse on one player", () => {
+    const focusNames = (level: number) =>
+      names(
+        read(promptFinesse, ALICE, level).readings[0]!.interpretations.map((i) => i.focusIdentity),
+      );
+    expect(focusNames(1)).toEqual(["r2", "r3"]);
+    const both = read(promptFinesse, ALICE, 2).readings[0]!.interpretations.find(
+      (i) => i.focusIdentity.rank === 4,
+    )!;
+    expect(both.conventions).toContain("prompt-plus-finesse");
+    expect(both.connections.map(({ kind, seat, ids }) => [kind, seat, ids])).toEqual([
+      ["prompt", BOB, [promptFinesse.cardAt(3, BOB)]],
+      ["finesse", BOB, [promptFinesse.cardAt(0, BOB)]],
+    ]);
+  });
+
+  it("play the prompt first, then the finesse, while the receiver waits", () => {
+    expect(top(promptFinesse)).toMatchObject({
+      action: playOf(promptFinesse.cardAt(3, BOB)),
+      category: "mandated",
+      reasons: [{ convention: "prompt" }],
+    });
+    const prompted = promptFinesse.play(3);
+    const cathy = privateKnowledge(playerView(prompted.state, CATHY), read(prompted, CATHY, 2));
+    expect(names(cathy[cathysFour]!)).toEqual(["r3", "r4"]);
+    expect(top(prompted).action).not.toEqual(playOf(cathysFour));
+
+    // Cathy and Alice discard. The r3 slid to Bob's slot 2 when he drew.
+    const waited = prompted.discard(4).discard(4);
+    expect(top(waited)).toMatchObject({
+      action: playOf(promptFinesse.cardAt(0, BOB)),
+      category: "mandated",
+      reasons: [{ convention: "finesse" }],
+    });
+    const finessed = waited.play(1);
+    const after = privateKnowledge(playerView(finessed.state, CATHY), read(finessed, CATHY, 2));
+    expect(names(after[cathysFour]!)).toEqual(["r4"]);
   });
 });

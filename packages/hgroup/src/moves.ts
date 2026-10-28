@@ -16,6 +16,7 @@ import {
   type ClueReading,
   connectingCards,
   countsAsClued,
+  fitting,
   type GivenClue,
   hasPlayed,
   type Interpretation,
@@ -200,9 +201,7 @@ function isOwed(judge: Judge, id: CardId): boolean {
   return knowledge.readings.some((reading) => {
     // Only where every reading the viewer can't rule out needs the card: a self-prompt that may be
     // a direct play clue owes nothing yet.
-    const live = pending(reading).filter((interpretation) =>
-      couldBe(mine[reading.focus]!, interpretation.focusIdentity),
-    );
+    const live = fitting(view, knowledge, reading, mine);
     return (
       live.length > 0 &&
       live.every((interpretation) =>
@@ -486,7 +485,10 @@ const SAVES: readonly ConventionId[] = ["5-save", "2-save", "critical-save", "5-
  */
 function mainConvention(interpretation: Interpretation): ConventionId {
   const { conventions } = interpretation;
-  if (conventions.includes("multi-prompt")) return "multi-prompt";
+  const combined = (["prompt-plus-finesse", "multi-finesse", "multi-prompt"] as const).find((id) =>
+    conventions.includes(id),
+  );
+  if (combined !== undefined) return combined;
   const [connection] = interpretation.connections;
   if (connection !== undefined) return connection.kind;
   if (interpretation.kind === "save") {

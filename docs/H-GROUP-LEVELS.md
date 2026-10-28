@@ -80,7 +80,7 @@ Level 1 is everything in the beginner's guide; the level 1 page restates it with
 Implemented so far: `chop`, `trash`, `clue-focus`, `good-touch`, `play-clue`, `delayed-play-clue`,
 `save-clue`, `5-save`, `2-save`, `critical-save`, `prompt`, `finesse`, `finesse-position`,
 `finessed-cards-count-as-clued` and `prompts-before-finesses` (reading clues), and `save-principle`,
-`minimum-clue-value` and `early-game` (ranking moves). From level 2: `5-stall` and `multi-prompt`. Specs:
+`minimum-clue-value` and `early-game` (ranking moves). From level 2: `5-stall`, `multi-prompt`, `multi-finesse` and `prompt-plus-finesse`. Specs:
 [conventions/level-1.md](./conventions/level-1.md), [conventions/level-2.md](./conventions/level-2.md).
 
 | ID                              | Convention                                                                                     | Kind        | Summary                                                                                                                                                      |

@@ -1,6 +1,7 @@
 import { type Action, maxScore, playerView, replay as replayGame, score } from "@hanabi/engine";
+import { CONVENTION_LEVELS, type Level } from "@hanabi/hgroup";
 import { useEffect, useRef, useState } from "react";
-import { clearGame, loadGame, type SavedGame, saveGame } from "./saved.ts";
+import { clearGame, loadGame, loadLevel, type SavedGame, saveGame, saveLevel } from "./saved.ts";
 import {
   type PlayerCount,
   type Session,
@@ -12,6 +13,11 @@ import { Review } from "./Review.tsx";
 import { Table } from "./Table.tsx";
 
 const PLAYER_COUNTS: readonly PlayerCount[] = [2, 3, 4, 5];
+/** Every level up to the highest one the H-Group engine has a convention for. */
+const LEVELS: readonly Level[] = Array.from(
+  { length: Math.max(...Object.values(CONVENTION_LEVELS)) },
+  (_, i) => i + 1,
+);
 const randomSeed = () => Math.floor(Math.random() * 1_000_000);
 
 /** A game to play: new from its options, or resumed from a saved record. */
@@ -29,16 +35,17 @@ export function App() {
 function Setup({ onStart }: { onStart: (options: SessionOptions) => void }) {
   const [numPlayers, setNumPlayers] = useState<PlayerCount>(3);
   const [seed, setSeed] = useState(randomSeed);
+  const [level, setLevel] = useState<Level>(() => loadLevel(LEVELS) ?? 1);
   return (
     <form
       className="setup"
       onSubmit={(event) => {
         event.preventDefault();
-        onStart({ numPlayers, seed, level: 1, humanSeat: 0, aiDelayMs: 600 });
+        onStart({ numPlayers, seed, level, humanSeat: 0, aiDelayMs: 600 });
       }}
     >
       <h1>Hanabi</h1>
-      <p>You play with H-Group level 1 AI teammates.</p>
+      <p>You play with H-Group AI teammates, all playing at the level you pick.</p>
       <label>
         Players{" "}
         <select
@@ -46,6 +53,21 @@ function Setup({ onStart }: { onStart: (options: SessionOptions) => void }) {
           onChange={(event) => setNumPlayers(PLAYER_COUNTS[event.target.selectedIndex]!)}
         >
           {PLAYER_COUNTS.map((n) => (
+            <option key={n}>{n}</option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Level{" "}
+        <select
+          value={level}
+          onChange={(event) => {
+            const picked = LEVELS[event.target.selectedIndex]!;
+            setLevel(picked);
+            saveLevel(picked);
+          }}
+        >
+          {LEVELS.map((n) => (
             <option key={n}>{n}</option>
           ))}
         </select>
@@ -112,7 +134,7 @@ function Game({ options, record, onLeave, ...start }: GameStart & { onLeave: () 
     <div className="game">
       <header>
         <span>
-          Seed {options.seed}, {options.numPlayers} players
+          Seed {options.seed}, {options.numPlayers} players, level {options.level}
         </span>
         {over ? (
           <button onClick={leave}>New game</button>

@@ -33,6 +33,9 @@ export const CONVENTION_LEVELS = {
 
 export type ConventionId = keyof typeof CONVENTION_LEVELS;
 
+/** The highest level with a convention implemented. */
+export const MAX_LEVEL: Level = Math.max(...Object.values(CONVENTION_LEVELS));
+
 /** Whether `convention` is in force at a table playing at `level`. */
 export const applies = (convention: ConventionId, level: Level): boolean =>
   CONVENTION_LEVELS[convention] <= level;

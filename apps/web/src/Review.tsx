@@ -44,7 +44,7 @@ export function Review(props: { replay: Replay; level: Level; you: Seat }) {
   if (turns === null) return <p>Reviewing…</p>;
   const turn = turns[index];
   if (turn === undefined) return <p>No moves to review.</p>;
-  const { review, state, event, moment, chop } = turn;
+  const { review, state, event, moment, chop, preview } = turn;
   const actorView = playerView(state, review.seat);
   const next = (review.seat + 1) % state.config.numPlayers;
   const view: PlayerView =
@@ -107,6 +107,18 @@ export function Review(props: { replay: Replay; level: Level; you: Seat }) {
                   {describeAction(you, actorView, review.alternative.action)}
                 </summary>
                 <Judged move={review.alternative} />
+              </details>
+            )}
+            {preview !== undefined && (
+              <details className="preview" open>
+                <summary>
+                  <span className="preview-mark">L{preview.level}</span> Level {preview.level} would
+                  pick: {describeAction(you, actorView, preview.move.action)}
+                </summary>
+                <Judged move={preview.move} />
+                <p className="rank">
+                  Ranked {preview.rank} of {review.moves} at level {props.level}
+                </p>
               </details>
             )}
           </section>
@@ -173,6 +185,10 @@ function MovesHelp() {
           <strong>(!)</strong>: a discard of a card that wasn't the player's chop
         </li>
         <li>
+          <span className="preview-mark">L2</span>: a preview of the next level up, where the engine
+          would pick a different move. Select the move to see it.
+        </li>
+        <li>
           <strong>Bold</strong>: your moves
         </li>
         <li>Hover a move to see where it ranked among the legal moves.</li>
@@ -200,7 +216,7 @@ function TurnList(props: {
       </div>
       <MovesHelp />
       <ol>
-        {props.turns.map(({ review, event, moment, chop }, i) => (
+        {props.turns.map(({ review, event, moment, chop, preview }, i) => (
           <li
             key={i}
             className={[
@@ -217,6 +233,14 @@ function TurnList(props: {
             >
               <span className={`dot ${review.move.category} ${standing(review)}`} />
               {describeEvent(props.you, event, moment, chop)}
+              {preview !== undefined && (
+                <span
+                  className="preview-mark"
+                  title={`Level ${preview.level} would pick differently`}
+                >
+                  L{preview.level}
+                </span>
+              )}
             </button>
           </li>
         ))}

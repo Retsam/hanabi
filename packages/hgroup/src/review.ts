@@ -65,7 +65,8 @@ export function reviewMove(view: PlayerView, action: Action, level: Level): Turn
   };
 }
 
-function sameAction(a: Action, b: Action): boolean {
+/** Whether `a` and `b` are the same move: the same card, or the same clue to the same player. */
+export function sameAction(a: Action, b: Action): boolean {
   if (a.type === "clue" || b.type === "clue") {
     return (
       a.type === "clue" &&

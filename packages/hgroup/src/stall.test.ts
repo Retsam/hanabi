@@ -62,7 +62,6 @@ describe("the 5 Stall", () => {
     const game = deal({ hands, clueTokens: 7 });
     expect(judged(game, fiveToBob)).toMatchObject({
       category: "permitted",
-      score: 5,
       reasons: [
         { convention: "5-stall", text: "Cluing number 5 to seat 1 is a 5 Stall on the blue 5." },
       ],
@@ -72,6 +71,12 @@ describe("the 5 Stall", () => {
       category: "permitted",
       reasons: [{ convention: "chop" }],
     });
+  });
+
+  it("ranks above discarding chop, as it keeps the Early Game going", () => {
+    const game = deal({ hands, clueTokens: 7 });
+    const chopDiscard = judged(game, { type: "discard", cardId: game.cardAt(4, ALICE) });
+    expect(judged(game, fiveToBob).score).toBeGreaterThan(chopDiscard.score);
   });
 
   it("ranks below a play clue", () => {

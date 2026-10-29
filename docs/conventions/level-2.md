@@ -12,8 +12,10 @@ content is CC BY-SA 4.0. The tests are in `packages/hgroup/src/stall.test.ts` (`
   its focus is any 5 that isn't trash, and nothing has to play. A 5 clue focused on chop is still a 5
   Save, and after the Early Game an off-chop 5 clue is a play clue again, as at level 1.
 - **Rules out:** the play clue on the 5, and any prompt or finesse that would lead up to it.
-- **Ranking:** a 5 Stall is permitted with a fixed low score, below discarding the chop and below a
-  play or save clue that gets a card. It is not a play or save clue, so it doesn't stop the chop discard that ends the Early Game.
+- **Ranking:** a 5 Stall is permitted with a fixed score: above discarding the chop, since the site
+  gives it as a way to extend the Early Game, but below discarding known trash and below a play or
+  save clue that gets a card. It is not a play or save clue, so a chop discard stays permitted
+  rather than violating `early-game`.
 - **Judgment calls:** the Early Game lasts until the first discard in the log, as for `early-game`; a
   test scenario that starts with cards in the discard pile starts after it. Mid-game 5 Stalls in a
   stalling situation, and the rules on when a 5 Stall is required or which 5 it goes to, are the

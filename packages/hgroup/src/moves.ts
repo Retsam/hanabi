@@ -374,14 +374,15 @@ function describeClue(
   };
 }
 
-const STALL_SCORE = 5;
+const STALL_SCORE = 12;
 
 /**
  * What a clue is worth before the checks: each card it gets, each connection, a card to play now;
  * less if it spends the last clue token.
  */
 function clueValue(judge: Judge, clue: ClueCase): number {
-  // A stall only gets 5's that are safe off chop anyway: worth less than any play or save clue.
+  // A stall only gets 5's that are safe off chop anyway: worth less than any play or save clue,
+  // but more than discarding chop, as it keeps the Early Game going.
   if (isStall(clue.primary)) return STALL_SCORE;
   let score = 10 * clue.gotten.length + 5 * clue.real[0]!.connections.length;
   if (isPlayable(judge.knowledge.moment, clue.focusCard) && !clue.saving) score += 10;

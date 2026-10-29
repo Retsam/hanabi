@@ -33,7 +33,7 @@ describe("reviewTurns", () => {
   });
 
   it("previews the next level's pick where it beats this level's", async () => {
-    // A game where level 2's multi-prompt reads clues differently.
+    // A game where level 2 gives 5 Stalls and reads clues as multi-prompts.
     const { record } = await selfPlay(1, 5, 1);
 
     const previews = reviewTurns(record, 1).flatMap(({ review, preview }) =>
@@ -45,9 +45,13 @@ describe("reviewTurns", () => {
       expect(preview.level).toBe(2);
       // Self-play took level 1's top move, so level 2's differing pick ranks below it there.
       expect(preview.move.action).not.toEqual(review.move.action);
-      expect(preview.move.reasons.map((reason) => reason.convention)).toContain("multi-prompt");
       expect(preview.rank).toBeGreaterThan(1);
     }
+    const conventions = previews.flatMap(({ preview }) =>
+      preview.move.reasons.map((reason) => reason.convention),
+    );
+    expect(conventions).toContain("5-stall");
+    expect(conventions).toContain("multi-prompt");
   });
 
   it("has nothing to preview at the highest level", async () => {

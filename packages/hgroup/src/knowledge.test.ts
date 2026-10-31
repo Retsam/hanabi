@@ -297,6 +297,23 @@ describe("Good Touch", () => {
     expect(common(game, BOB, game.cardAt(2, BOB))).toEqual(["g5"]);
   });
 
+  it("counts a clued card the clue itself pins down when reading the focus", () => {
+    // Cathy's slot 2 was clued blue: b1 to play or a later blue card. Alice's 1 clue touches it
+    // again, with a trash y1 as the focus. The clue itself makes the blue card the b1, so the focus
+    // can't be the b1 too: it reads as nothing, and the blue card is the one to play.
+    const game = deal({
+      hands: [
+        ["r3", "y3", "g3", "p3", "r4"],
+        ["g4", "b4", "r2", "p4", "y5"],
+        ["y1", "g5", "b*1", "r5", "p5"],
+      ],
+      stacks: { red: 1, yellow: 3, green: 1, purple: 1 },
+    }).clue(CATHY, 1);
+    expect(lastReading(game, CATHY).play).toEqual([]);
+    expect(common(game, CATHY, game.cardAt(2, CATHY))).toEqual(["b1"]);
+    expect(common(game, CATHY, game.cardAt(0, CATHY))).not.toEqual(["b1"]);
+  });
+
   it("is off at level 0, where clues carry only rules-level information", () => {
     const game = deal({
       hands: [

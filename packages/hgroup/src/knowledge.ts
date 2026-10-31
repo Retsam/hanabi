@@ -281,7 +281,7 @@ export function readClue(view: PlayerView, table: Table, given: GivenClue): Clue
     table,
     given,
     focus,
-    facts: tableFacts(view, table),
+    facts: tableFacts(view, table, { ...given, focus }),
     candidates: table.common[focus]!.filter((card) => clueMatches(card, given.clue)),
     uses,
   };
@@ -389,7 +389,7 @@ function playReadings(read: ClueOnTable): Interpretation[] {
 
 /** A play clue on `next`, the card its suit needs: playable now, or once the clued cards before it play. */
 function directPlay(read: ClueOnTable, next: Card): Interpretation[] {
-  if (!couldBe(read.candidates, next)) return [];
+  if (!couldBe(read.candidates, next) || read.facts.isTrash(next, read.focus)) return [];
   if (isPlayable(read.table.moment, next)) return [readAs("play", next, ["play-clue"])];
   if (!read.uses("delayed-play-clue")) return [];
   return [readAs("play", next, ["play-clue", "delayed-play-clue"])];
@@ -823,19 +823,41 @@ function twoSaveSeen(view: Sight, reading: ClueReading, interpretation: Interpre
 
 export type TableFacts = ReturnType<typeof tableFacts>;
 
-/** Facts about the table that every player agrees on. */
-export function tableFacts(view: PlayerView, table: Table) {
+/**
+ * Facts about the table that every player agrees on. With `clue`, the facts its focus is read with:
+ * the clue already narrows the receiver's other cards, so the focus can't duplicate a clued card
+ * the clue pins down (a blue card that was b1 or b3, touched again by a 1 clue). That counts for
+ * trash only: a pinned card still connects to the focus as a prompt, not as a card the suit has.
+ */
+export function tableFacts(
+  view: PlayerView,
+  table: Table,
+  clue?: GivenClue & { readonly focus: CardId },
+) {
   const { moment, common } = table;
   const { config } = view;
 
-  /** Clued (or finessed) cards whose identity the whole table knows. */
-  const gotten = moment.hands
-    .flat()
-    .filter((id) => countsAsClued(table, id))
-    .flatMap((id) => {
-      const card = identity(common[id]!);
-      return card ? [{ id, card }] : [];
-    });
+  /** What the table knows a card is after `clue`, if any, has narrowed it. */
+  const narrowedByClue = (id: CardId): Note => {
+    const note = common[id]!;
+    if (clue === undefined || id === clue.focus || !moment.hands[clue.target]!.includes(id)) {
+      return note;
+    }
+    const fits = (card: Card) => clueMatches(card, clue.clue) === clue.touched.includes(id);
+    // If an earlier misread ruled out what the clue now says, the note stays as it was.
+    return note.some(fits) ? note.filter(fits) : note;
+  };
+  /** Clued (or finessed) cards whose identity the whole table knows, from `note`. */
+  const gottenBy = (note: (id: CardId) => Note) =>
+    moment.hands
+      .flat()
+      .filter((id) => countsAsClued(table, id))
+      .flatMap((id) => {
+        const card = identity(note(id));
+        return card ? [{ id, card }] : [];
+      });
+  const gotten = gottenBy((id) => common[id]!);
+  const gottenAfterClue = clue === undefined ? gotten : gottenBy(narrowedByClue);
   const discarded = (card: Card) =>
     moment.discardPile.filter((id) => sameCard(view.cards[id]!.card!, card)).length;
   const stack = (card: Card) => stackHeight(moment, card.suit);
@@ -869,10 +891,13 @@ export function tableFacts(view: PlayerView, table: Table) {
       const needed = next(card.suit);
       return needed !== undefined && sameCard(needed, card);
     },
-    /** Trash: can never play, or another gotten card (not `self`) is already this card. */
+    /**
+     * Trash: can never play, or another gotten card (not `self`) is already this card, counting the
+     * cards `clue` pins down.
+     */
     isTrash: (card: Card, self: CardId) =>
       !reachable(card) ||
-      gotten.some(({ id, card: other }) => id !== self && sameCard(other, card)),
+      gottenAfterClue.some(({ id, card: other }) => id !== self && sameCard(other, card)),
     /** Critical: still needed, and every other copy has been discarded. */
     isCritical: (card: Card) => reachable(card) && discarded(card) === copies(config, card) - 1,
   };

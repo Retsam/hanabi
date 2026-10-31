@@ -1,4 +1,11 @@
-import { type Action, maxScore, playerView, replay as replayGame, score } from "@hanabi/engine";
+import {
+  type Action,
+  type CardId,
+  maxScore,
+  playerView,
+  replay as replayGame,
+  score,
+} from "@hanabi/engine";
 import { type Level, MAX_LEVEL } from "@hanabi/hgroup";
 import { useEffect, useRef, useState } from "react";
 import { clearGame, loadGame, loadLevel, type SavedGame, saveGame, saveLevel } from "./saved.ts";
@@ -9,6 +16,7 @@ import {
   type Snapshot,
   startSession,
 } from "./session.ts";
+import { type CardNote, type Notes, setNote } from "./notes.ts";
 import { Review } from "./Review.tsx";
 import { Table } from "./Table.tsx";
 
@@ -18,7 +26,8 @@ const LEVELS: readonly Level[] = Array.from({ length: MAX_LEVEL }, (_, i) => i +
 const randomSeed = () => Math.floor(Math.random() * 1_000_000);
 
 /** A game to play: new from its options, or resumed from a saved record. */
-type GameStart = Pick<SavedGame, "options"> & Partial<Pick<SavedGame, "record" | "abandoned">>;
+type GameStart = Pick<SavedGame, "options"> &
+  Partial<Pick<SavedGame, "record" | "abandoned" | "notes">>;
 
 export function App() {
   const [start, setStart] = useState<GameStart | null>(loadGame);
@@ -93,6 +102,9 @@ function Game({ options, record, onLeave, ...start }: GameStart & { onLeave: () 
   const [error, setError] = useState<string | null>(null);
   const [reviewing, setReviewing] = useState(false);
   const [abandoning, setAbandoning] = useState(false);
+  const [notes, setNotes] = useState<Notes>(start.notes ?? {});
+  // The session saves after each move from its own callback, which needs the latest notes.
+  const notesRef = useRef(notes);
   const session = useRef<Session | null>(null);
 
   useEffect(() => {
@@ -101,7 +113,7 @@ function Game({ options, record, onLeave, ...start }: GameStart & { onLeave: () 
       options,
       (next) => {
         setSnapshot(next);
-        saveGame({ options, record: next.record });
+        saveGame({ options, record: next.record, notes: notesRef.current });
       },
       record,
     );
@@ -112,7 +124,7 @@ function Game({ options, record, onLeave, ...start }: GameStart & { onLeave: () 
   /** Stops the game where it stands and shows it as over, saved as abandoned so it can be reviewed. */
   const abandon = () => {
     session.current?.stop();
-    if (snapshot !== null) saveGame({ options, record: snapshot.record, abandoned: true });
+    if (snapshot !== null) saveGame({ options, record: snapshot.record, abandoned: true, notes });
     setAbandoned(true);
     setAbandoning(false);
   };
@@ -127,6 +139,13 @@ function Game({ options, record, onLeave, ...start }: GameStart & { onLeave: () 
   if (snapshot === null) return null;
   const { view, record: replay } = snapshot;
   const over = abandoned || view.status === "over";
+
+  const changeNote = (id: CardId, note: CardNote) => {
+    const next = setNote(notes, id, note);
+    setNotes(next);
+    notesRef.current = next;
+    saveGame({ options, record: replay, notes: next, ...(abandoned && { abandoned }) });
+  };
   return (
     <div className="game">
       <header>
@@ -167,6 +186,8 @@ function Game({ options, record, onLeave, ...start }: GameStart & { onLeave: () 
         <Table
           view={view}
           level={options.level}
+          notes={notes}
+          onNote={changeNote}
           {...(!over && {
             onAct: (action: Action) => setError(session.current?.submit(action) ?? null),
           })}

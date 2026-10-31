@@ -13,8 +13,9 @@ import {
 } from "@hanabi/engine";
 import { clueMatches, type Level } from "@hanabi/hgroup";
 import { useMemo, useState } from "react";
-import { HandCard } from "./Card.tsx";
+import { HandCard, NoteEditor } from "./Card.tsx";
 import { chops, clueName, describeEvent, seatName } from "./describe.ts";
+import type { CardNote, Notes } from "./notes.ts";
 
 export function Table(props: {
   view: PlayerView;
@@ -26,9 +27,14 @@ export function Table(props: {
   onAct?: (action: Action) => void;
   /** Cards to mark, such as the ones a reviewed move used. */
   highlight?: ReadonlySet<CardId>;
+  /** The player's notes on cards, shown under each card. */
+  notes?: Notes;
+  /** Changes a card's note. With it, clicking a card in a hand opens its notes. */
+  onNote?: (id: CardId, note: CardNote) => void;
 }) {
-  const { view, level, you = view.seat, onAct, highlight } = props;
+  const { view, level, you = view.seat, onAct, highlight, notes, onNote } = props;
   const [considering, setConsidering] = useState<{ target: Seat; clue: Clue } | null>(null);
+  const [editing, setEditing] = useState<CardId | null>(null);
   const live = view.status !== "over";
   const myTurn = onAct !== undefined && live && view.currentPlayer === you;
   const seats = Array.from(
@@ -54,7 +60,14 @@ export function Table(props: {
           </h2>
           <div className="hand">
             {view.hands[seat]!.map((id) => (
-              <HandCard key={id} view={view} id={id} highlight={marked(seat, id)}>
+              <HandCard
+                key={id}
+                view={view}
+                id={id}
+                highlight={marked(seat, id)}
+                note={notes?.[id]}
+                {...(onNote !== undefined && { onOpen: () => setEditing(id) })}
+              >
                 {myTurn && seat === you && (
                   <div className="card-actions">
                     <button onClick={() => onAct({ type: "play", cardId: id })}>Play</button>
@@ -84,6 +97,15 @@ export function Table(props: {
       ))}
       <Discards view={view} />
       <Log view={view} level={level} you={you} />
+      {editing !== null && onNote !== undefined && (
+        <NoteEditor
+          view={view}
+          id={editing}
+          note={notes?.[editing]}
+          onChange={(note) => onNote(editing, note)}
+          onClose={() => setEditing(null)}
+        />
+      )}
     </div>
   );
 }

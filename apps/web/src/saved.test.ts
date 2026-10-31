@@ -39,6 +39,13 @@ describe("saved games", () => {
     expect(loadGame(storage)).toEqual(game);
   });
 
+  it("keeps the player's card notes with the game", () => {
+    const storage = memoryStorage();
+    const noted = { ...game, notes: { [aliceCard]: { crossedOff: ["red 5"], text: "chop" } } };
+    saveGame(noted, storage);
+    expect(loadGame(storage)).toEqual(noted);
+  });
+
   it("forgets a cleared game", () => {
     const storage = memoryStorage();
     saveGame(game, storage);

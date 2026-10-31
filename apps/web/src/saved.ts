@@ -1,7 +1,9 @@
-// The game in progress, kept in the browser's localStorage so a reload resumes it. Only the options
-// and the replay record are stored; the state is rebuilt by replaying the record's actions.
+// The game in progress, kept in the browser's localStorage so a reload resumes it. Only the options,
+// the replay record and the player's card notes are stored; the state is rebuilt by replaying the
+// record's actions.
 import { type Replay, replay } from "@hanabi/engine";
 import type { Level } from "@hanabi/hgroup";
+import type { Notes } from "./notes.ts";
 import type { SessionOptions } from "./session.ts";
 
 export interface SavedGame {
@@ -9,6 +11,8 @@ export interface SavedGame {
   readonly record: Replay;
   /** The player gave up on it before the end; it is kept for review until they start a new game. */
   readonly abandoned?: boolean;
+  /** The player's notes on cards. Saves from before notes existed have none. */
+  readonly notes?: Notes;
 }
 
 /** The part of the Web Storage API this uses, so tests can pass an in-memory one. */

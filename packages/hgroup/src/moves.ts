@@ -78,14 +78,14 @@ export function rankMoves(view: PlayerView, level: Level): RankedMove[] {
   // Whether the viewer has a play or save clue to give. In the Early Game every such clue comes
   // before discarding chop (`early-game`), so this decides whether a chop discard violates it. A
   // 5 Stall is neither, so it doesn't hold off the end of the Early Game.
-  const playOrSaveClueAvailable = clues.some(
-    (move) => move.category !== "violates" && move.reasons[0]!.convention !== "5-stall",
-  );
+  const available = clues.filter((move) => move.category !== "violates");
+  const stallAvailable = available.some(isStallMove);
+  const playOrSaveClueAvailable = available.some((move) => !isStallMove(move));
   const hand = view.hands[view.seat]!;
   const plays = hand.map((id) => judgePlay(judge, id));
   const discards =
     view.clueTokens < view.config.maxClueTokens
-      ? hand.map((id) => judgeDiscard(judge, id, playOrSaveClueAvailable))
+      ? hand.map((id) => judgeDiscard(judge, id, playOrSaveClueAvailable, stallAvailable))
       : [];
   return [...plays, ...discards, ...clues]
     .map((move, i) => ({ move, i }))
@@ -220,7 +220,14 @@ function isOwed(judge: Judge, id: CardId): boolean {
   });
 }
 
-function judgeDiscard(judge: Judge, id: CardId, playOrSaveClueAvailable: boolean): RankedMove {
+const isStallMove = (ranked: RankedMove) => ranked.reasons[0]!.convention === "5-stall";
+
+function judgeDiscard(
+  judge: Judge,
+  id: CardId,
+  playOrSaveClueAvailable: boolean,
+  stallAvailable: boolean,
+): RankedMove {
   const action = { type: "discard", cardId: id } as const;
   const { knowledge, view } = judge;
   const note = judge.mine[id]!;
@@ -243,6 +250,16 @@ function judgeDiscard(judge: Judge, id: CardId, playOrSaveClueAvailable: boolean
         "early-game",
         [id],
         "In the Early Game, every play and save clue is given before anyone discards.",
+      ),
+    ]);
+  }
+  if (knowledge.earlyGame && stallAvailable) {
+    // The 5 Stall is how the Early Game is stalled, so discarding chop comes after it.
+    return move(action, "permitted", CHOP_AFTER_STALL_SCORE, [
+      reason(
+        "chop",
+        [id],
+        "Discarding chop, which ends the Early Game: a 5 Stall would keep it going.",
       ),
     ]);
   }
@@ -383,15 +400,19 @@ function describeClue(
   };
 }
 
-const STALL_SCORE = 12;
+/**
+ * A 5 Stall is the last resort for stalling the Early Game: below every play or save clue (a one-card
+ * clue on the last clue token scores 5), but above discarding chop while the Early Game lasts.
+ */
+const STALL_SCORE = 4;
+const CHOP_AFTER_STALL_SCORE = 3;
 
 /**
  * What a clue is worth before the checks: each card it gets, each connection, a card to play now;
  * less if it spends the last clue token.
  */
 function clueValue(judge: Judge, clue: ClueCase): number {
-  // A stall only gets 5's that are safe off chop anyway: worth less than any play or save clue,
-  // but more than discarding chop, as it keeps the Early Game going.
+  // A stall only gets 5's that are safe off chop anyway: worth less than any play or save clue.
   if (isStall(clue.primary)) return STALL_SCORE;
   let score = 10 * clue.gotten.length + 5 * clue.real[0]!.connections.length;
   if (isPlayable(judge.knowledge.moment, clue.focusCard) && !clue.saving) score += 10;

@@ -76,13 +76,45 @@ describe("the 5 Stall", () => {
   it("ranks above discarding chop, as it keeps the Early Game going", () => {
     const game = deal({ hands, clueTokens: 7 });
     const chopDiscard = judged(game, { type: "discard", cardId: game.cardAt(4, ALICE) });
+    expect(chopDiscard.category).toBe("permitted");
     expect(judged(game, fiveToBob).score).toBeGreaterThan(chopDiscard.score);
+    expect(rankMoves(playerView(game.state, ALICE), 2)[0]!.action).toEqual(fiveToBob);
   });
 
   it("ranks below a play clue", () => {
     const game = deal({
       hands: [hands[0]!, hands[1]!, ["r1", "y3", "b3", "p3", "g4"]],
       clueTokens: 7,
+    });
+    const playClue = judged(game, {
+      type: "clue",
+      target: CATHY,
+      clue: { kind: "color", value: "red" },
+    });
+    expect(playClue.category).toBe("permitted");
+    expect(judged(game, fiveToBob).score).toBeLessThan(playClue.score);
+  });
+
+  it("ranks below a 2 Save that isn't urgent", () => {
+    // Cathy's chop is the g2, but Bob plays first, so saving it can wait.
+    const game = deal({
+      hands: [hands[0]!, hands[1]!, ["r3", "y3", "b3", "p3", "g2"]],
+      clueTokens: 7,
+    });
+    const twoSave = judged(game, {
+      type: "clue",
+      target: CATHY,
+      clue: { kind: "rank", value: 2 },
+    });
+    expect(twoSave.category).toBe("permitted");
+    expect(twoSave.reasons[0]!.convention).toBe("2-save");
+    expect(judged(game, fiveToBob).score).toBeLessThan(twoSave.score);
+  });
+
+  it("ranks below a play clue on the last clue token", () => {
+    const game = deal({
+      hands: [hands[0]!, hands[1]!, ["r1", "y3", "b3", "p3", "g4"]],
+      clueTokens: 1,
     });
     const playClue = judged(game, {
       type: "clue",

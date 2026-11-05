@@ -468,7 +468,8 @@ function allows({ uses }: ClueOnTable, chain: Chain): boolean {
  *   `card`, other than the ones `chain` already prompts. If those cards were going to play anyway
  *   it is a delayed play clue, not a prompt.
  * - A finesse: a seat that plays after the giver and before the receiver has no such clued card
- *   (`prompts-before-finesses`), so their finesse position blind-plays. Either `card` is playable
+ *   (`prompts-before-finesses`), so their finesse position blind-plays. At level 2 the seat can
+ *   also play after the receiver (`reverse-finesse`): the receiver waits for it. Either `card` is playable
  *   now, or (level 2) it will be once the chain's prompts and finesses have played, and the seat
  *   plays no earlier than the seats holding them. A seat finessed twice blind-plays its finesse
  *   positions left to right.
@@ -497,6 +498,7 @@ function connectionsFor(
 
   for (const seat of seats) {
     const beforeReceiver = seats.indexOf(seat) < seats.indexOf(given.target);
+    const afterReceiver = seats.indexOf(seat) > seats.indexOf(given.target);
     const ids = moment.hands[seat]!.filter(
       (id) =>
         id !== focus && !prompted.has(id) && isClued(moment, id) && couldBe(common[id]!, card),
@@ -516,13 +518,16 @@ function connectionsFor(
         candidateIds: ids,
       };
       result.push({ connection, conventions });
-    } else if (beforeReceiver && uses("finesse") && finesseFits(read, chain, seat, card)) {
+    } else if (
+      (beforeReceiver || (afterReceiver && uses("reverse-finesse"))) &&
+      uses("finesse") &&
+      finesseFits(read, chain, seat, card)
+    ) {
       const id = finessePosition({ ...table, finessed: [...table.finessed, ...finessed] }, seat);
       if (id === undefined) continue;
-      result.push({
-        connection: { kind: "finesse", seat, card, candidateIds: [id] },
-        conventions: ["finesse", "finesse-position"],
-      });
+      const conventions: ConventionId[] = ["finesse", "finesse-position"];
+      if (afterReceiver) conventions.push("reverse-finesse");
+      result.push({ connection: { kind: "finesse", seat, card, candidateIds: [id] }, conventions });
     }
   }
   return result;

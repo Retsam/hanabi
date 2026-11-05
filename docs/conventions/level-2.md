@@ -3,7 +3,7 @@
 Specs for the level 2 conventions `@hanabi/hgroup` implements so far, by their ids in
 [H-GROUP-LEVELS.md](../H-GROUP-LEVELS.md), in the same shape as [level-1.md](./level-1.md). The site's
 content is CC BY-SA 4.0. The tests are in `packages/hgroup/src/stall.test.ts` (`5-stall`) and
-`packages/hgroup/src/connections.test.ts` (prompts and finesses).
+`packages/hgroup/src/connections.test.ts` (prompts and finesses, including reverse finesses).
 
 ## `5-stall`
 
@@ -72,6 +72,27 @@ content is CC BY-SA 4.0. The tests are in `packages/hgroup/src/stall.test.ts` (`
   from the r4, and she waits.
 - **Judgment call:** a finesse followed by a prompt is level 2 here too. At level 1 a clue asks for one
   prompt or one finesse, beyond the cards that play anyway.
+
+## `reverse-finesse`
+
+- **Source:** [level 2](https://hanabi.github.io/level-2#the-reverse-finesse).
+- **Reading:** a finesse as in [level-1.md](./level-1.md#finesse), but on a player who plays after the
+  receiver (and before the giver). It combines with the other level 2 chains: a later card in a chain
+  can be finessed from a player after the receiver too.
+- **Receiver:** waiting needs no extra rule. In the site's first example Bob sees the r1 on Cathy's
+  finesse position, so his red card could be the r1 (a play clue) or the r2 (a Reverse Finesse). It
+  isn't known to be playable, so he does something else. Cathy sees the r2 in Bob's hand, so the
+  finesse is the only reading she can't rule out and she blind-plays. Then Bob knows his card is the
+  r2.
+- **Rules out:** as for any finesse, the finessed player's next turn must be the blind-play. In the
+  site's second example Bob's card is the r1, so Cathy, who sees it, doesn't blind-play, and that
+  rules the Reverse Finesse out: Bob plays his r1 next turn.
+- **Ranking:** a clue read as a Reverse Finesse is labelled `reverse-finesse` ahead of the other
+  level 2 chain conventions.
+- **Judgment calls:** a player who doesn't see a connecting card on someone's finesse position (it
+  isn't there, or it's in their own hand) has nothing to wait for, so the receiver only waits when
+  the card is visible to them. Common knowledge keeps longer chains open (Cathy finessed again for
+  the r3 and on), as for `multi-finesse`; the players rule them out from the cards they see.
 
 ## Owed plays
 

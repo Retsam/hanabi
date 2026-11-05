@@ -570,6 +570,29 @@ describe("reverse finesses (level 2)", () => {
     expect(red(1).category).toBe("violates");
   });
 
+  it("don't hold up a receiver who sees the finesse position isn't the card", () => {
+    // Blue on Bob's b4 and b5 could be a Reverse Finesse on the b5, with Cathy's finesse position
+    // as the b4. Bob sees her r2 there, so he plays his b4 and won't discard his g3 on chop: the
+    // Save Principle doesn't need the g3 saved now.
+    const game = deal({
+      hands: [
+        ["y1", "r5", "y1", "g4", "r4"],
+        ["g1", "r2", "b4", "b5", "g3"],
+        ["r2", "p3", "g4*", "r3", "p4"],
+      ],
+      stacks: { red: 0, yellow: 3, green: 2, blue: 3, purple: 1 },
+      clueTokens: 2,
+    });
+    const blue = rankMoves(playerView(game.state, ALICE), 2).find(
+      ({ action }) =>
+        action.type === "clue" && action.target === BOB && action.clue.value === "blue",
+    )!;
+    expect(blue).toMatchObject({
+      category: "mandated",
+      reasons: [{}, { convention: "save-principle" }],
+    });
+  });
+
   it("make the receiver wait while the finesse position they see could connect", () => {
     const bob = privateKnowledge(playerView(reverse.state, BOB), read(reverse, BOB, 2));
     expect(names(bob[bobsRed]!)).toEqual(["r1", "r2"]);

@@ -28,6 +28,7 @@ import {
   pending,
   privateKnowledge,
   readGame,
+  seenFitting,
   tableFacts,
   type TableFacts,
 } from "./knowledge.ts";
@@ -716,16 +717,18 @@ function isProtected(judge: Omit<Judge, "urgent">, id: CardId): boolean {
  * as of the next player's turn (see `openAtNext`).
  */
 function isBusy(judge: Omit<Judge, "urgent">, knowledge: Knowledge, seat: Seat): boolean {
-  const { moment, common } = knowledge;
+  const { moment } = knowledge;
+  const sight = seatSight(judge, knowledge, seat);
+  const knows = seatKnows(judge, knowledge, seat, sight);
   const known = (id: CardId) =>
     knowledge.readings
       .filter((reading) => reading.focus === id)
       .reduce((note, reading) => {
-        const open = openAtNext(judge, reading, seat);
+        const open = openAtNext(judge, knowledge, reading, sight, knows);
         return narrowed(note, (card) =>
           open.some((interpretation) => sameCard(interpretation.focusIdentity, card)),
         );
-      }, common[id]!);
+      }, knows[id]!);
   const knownPlay = moment.hands[seat]!.some((id) => {
     if (!countsAsClued(knowledge, id)) return false;
     const note = known(id);
@@ -738,16 +741,22 @@ function isBusy(judge: Omit<Judge, "urgent">, knowledge: Knowledge, seat: Seat):
 }
 
 /**
- * A reading's interpretations that are still open when the next player, `seat`, moves. One that
- * needs the viewer to play is ruled out by then, since the viewer doesn't play it this turn. If
- * `seat` is the receiver, they only read a Self-Finesse when nothing else is open.
+ * A reading's interpretations that the next player (`sight`, who knows `known`) can't rule out when
+ * they move. One that needs the viewer to play is ruled out by then, since the viewer doesn't play
+ * it this turn. If they are the receiver, they only read a Self-Finesse when nothing else is open.
  */
-function openAtNext(judge: Pick<Judge, "view">, reading: ClueReading, seat: Seat) {
-  const open = pending(reading).filter(
+function openAtNext(
+  judge: Pick<Judge, "view">,
+  knowledge: Knowledge,
+  reading: ClueReading,
+  sight: Sight,
+  known: readonly Note[],
+) {
+  const open = seenFitting(sight, knowledge, reading, known).filter(
     (interpretation) =>
       !interpretation.connections.some((connection) => connection.seat === judge.view.seat),
   );
-  return reading.target === seat ? asReceiver(reading, open) : open;
+  return reading.target === sight.seat ? asReceiver(reading, open) : open;
 }
 
 /**
@@ -762,11 +771,10 @@ function owesPlay(judge: Omit<Judge, "urgent">, knowledge: Knowledge, seat: Seat
       interpretation.connections.some((connection) => connection.seat === seat),
     );
   if (!open.some(involved)) return false;
-  const known = seatKnows(judge, knowledge, seat);
+  const sight = seatSight(judge, knowledge, seat);
+  const known = seatKnows(judge, knowledge, seat, sight);
   return open.some(({ reading }) => {
-    const kept = openAtNext(judge, reading, seat).filter((interpretation) =>
-      couldBe(known[reading.focus]!, interpretation.focusIdentity),
-    );
+    const kept = openAtNext(judge, knowledge, reading, sight, known);
     return (
       kept.length > 0 &&
       kept.every((interpretation) =>

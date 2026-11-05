@@ -914,8 +914,19 @@ export function fitting(
   reading: ClueReading,
   known: readonly Note[],
 ): Interpretation[] {
+  const fits = seenFitting(view, table, reading, known);
+  return view.seat === reading.target ? asReceiver(reading, fits) : fits;
+}
+
+/** `fitting` without the receiver's Self-Finesse fallback. */
+export function seenFitting(
+  view: Sight,
+  table: Pick<Table, "moment" | "common">,
+  reading: ClueReading,
+  known: readonly Note[],
+): Interpretation[] {
   const could = (id: CardId, card: Card) => couldBe(known[id]!, card);
-  const fits = pending(reading).filter(
+  return pending(reading).filter(
     (interpretation) =>
       could(reading.focus, interpretation.focusIdentity) &&
       !twoSaveSeen(view, reading, interpretation) &&
@@ -925,7 +936,6 @@ export function fitting(
           connectingCards(table, connection).some((id) => could(id, connection.card)),
       ),
   );
-  return view.seat === reading.target ? asReceiver(reading, fits) : fits;
 }
 
 export type TableFacts = ReturnType<typeof tableFacts>;

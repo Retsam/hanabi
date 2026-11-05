@@ -14,6 +14,7 @@ import {
   advance,
   chop,
   type ClueReading,
+  type Connection,
   connectingCards,
   countsAsClued,
   fitting,
@@ -511,7 +512,8 @@ function wrongConnection(
   for (const connection of interpretation.connections) {
     if (hasPlayed(after.moment, connection.card)) continue;
     const id = connectingCards(after, connection)[0];
-    const { kind, seat } = connection;
+    const { seat } = connection;
+    const kind = CONNECTION_NAMES[connection.kind];
     if (id === undefined) {
       return {
         text: `seat ${seat} has no card the ${kind} could play as the ${name(connection.card)}`,
@@ -531,6 +533,12 @@ function wrongConnection(
   }
   return undefined;
 }
+
+const CONNECTION_NAMES: Record<Connection["kind"], string> = {
+  delayed: "delayed play",
+  prompt: "prompt",
+  finesse: "finesse",
+};
 
 const finesses = (interpretation: Interpretation) =>
   interpretation.connections.filter((connection) => connection.kind === "finesse").length;
@@ -555,8 +563,11 @@ function mainConvention(interpretation: Interpretation): ConventionId {
     conventions.includes(id),
   );
   if (combined !== undefined) return combined;
-  const [connection] = interpretation.connections;
-  if (connection !== undefined) return connection.kind;
+  // Cards that play anyway make it a delayed play clue, below, unless a prompt or finesse follows.
+  const [played] = interpretation.connections.flatMap(({ kind }) =>
+    kind === "delayed" ? [] : [kind],
+  );
+  if (played !== undefined) return played;
   if (interpretation.kind === "save") {
     return conventions.find((id) => SAVES.includes(id)) ?? "save-clue";
   }

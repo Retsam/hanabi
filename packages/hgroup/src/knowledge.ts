@@ -49,21 +49,22 @@ export interface GivenClue {
 }
 
 /**
- * A card that has to play before a play clue's focus can, and that the table doesn't already know
- * about: a clued card that could be it (a prompt), or an unclued card that blind-plays (a finesse).
+ * A card that has to play before a play clue's focus can: a clued card that could be it and was
+ * going to play anyway (delayed, `delayed-play-clue`), a clued card that could be it and plays
+ * because of the clue (a prompt), or an unclued card that blind-plays (a finesse).
  */
 export interface Connection {
-  readonly kind: "prompt" | "finesse";
+  readonly kind: "delayed" | "prompt" | "finesse";
   /** Who holds the connecting card. */
   readonly seat: Seat;
   /** The card that has to play. */
   readonly card: Card;
   /**
    * The cards in `seat`'s hand it could be when the clue was given, leftmost first: the clued cards
-   * that could be `card` for a prompt (the leftmost is the one to play), the finesse position for a
-   * finesse.
+   * that could be `card` for a delayed card or a prompt (the leftmost is the one to play), the
+   * finesse position for a finesse.
    */
-  readonly ids: readonly CardId[];
+  readonly candidateIds: readonly CardId[];
 }
 
 /** One way a clue can be read: what its focus is, and what has to happen for it to be true. */
@@ -399,8 +400,6 @@ function directPlay(read: ClueOnTable, next: Card): Interpretation[] {
 interface Chain {
   readonly connections: readonly Connection[];
   readonly conventions: readonly ConventionId[];
-  /** How many of the connections are prompts, not cards that play anyway. */
-  readonly prompts: number;
 }
 
 /**
@@ -410,7 +409,7 @@ interface Chain {
 function connectedPlay(
   read: ClueOnTable,
   next: Card,
-  chain: Chain = { connections: [], conventions: [], prompts: 0 },
+  chain: Chain = { connections: [], conventions: [] },
 ): Interpretation[] {
   const rank = RANKS.find((each) => each === next.rank + 1);
   if (rank === undefined) return [];
@@ -419,7 +418,6 @@ function connectedPlay(
     const longer: Chain = {
       connections: [...chain.connections, connection],
       conventions: uniqBy([...chain.conventions, ...conventions]),
-      prompts: chain.prompts + (conventions.includes("prompt") ? 1 : 0),
     };
     if (!allows(read, longer)) return [];
     // Trash can't be the focus, but a chain can pass through it: a clued card the table already
@@ -439,16 +437,17 @@ function connectedPlay(
   });
 }
 
-const finesseCount = ({ connections }: Chain) =>
-  connections.filter(({ kind }) => kind === "finesse").length;
+const countOf = ({ connections }: Chain, kind: Connection["kind"]) =>
+  connections.filter((connection) => connection.kind === kind).length;
 
 /** The level 2 conventions that let a clue ask for `chain`'s mix of prompts and finesses. */
 function combined(chain: Chain): ConventionId[] {
-  const finesses = finesseCount(chain);
+  const prompts = countOf(chain, "prompt");
+  const finesses = countOf(chain, "finesse");
   const result: ConventionId[] = [];
-  if (chain.prompts > 1) result.push("multi-prompt");
+  if (prompts > 1) result.push("multi-prompt");
   if (finesses > 1) result.push("multi-finesse");
-  if (chain.prompts > 0 && finesses > 0) result.push("prompt-plus-finesse");
+  if (prompts > 0 && finesses > 0) result.push("prompt-plus-finesse");
   return result;
 }
 
@@ -482,10 +481,15 @@ function connectionsFor(
   const { table, given, focus, facts, uses } = read;
   const { moment, common } = table;
   const seats = seatsAfter(given.giver, read.view.config.numPlayers);
+  // The clued cards the chain already plays, and the finesse positions it already uses.
   const prompted = new Set(
-    chain.connections.flatMap(({ kind, ids }) => (kind === "prompt" ? [ids[0]!] : [])),
+    chain.connections.flatMap(({ kind, candidateIds }) =>
+      kind === "finesse" ? [] : [candidateIds[0]!],
+    ),
   );
-  const finessed = chain.connections.flatMap(({ kind, ids }) => (kind === "finesse" ? ids : []));
+  const finessed = chain.connections.flatMap(({ kind, candidateIds }) =>
+    kind === "finesse" ? candidateIds : [],
+  );
   // Once the chain has played, `card` is the card its suit needs next.
   const isNext = (other: Card) =>
     other.suit === card.suit ? other.rank === card.rank : facts.isNext(other);
@@ -505,12 +509,18 @@ function connectionsFor(
       if (!anyway && beforeReceiver && uses("prompts-before-finesses")) {
         conventions.push("prompts-before-finesses");
       }
-      result.push({ connection: { kind: "prompt", seat, card, ids }, conventions });
+      const connection: Connection = {
+        kind: anyway ? "delayed" : "prompt",
+        seat,
+        card,
+        candidateIds: ids,
+      };
+      result.push({ connection, conventions });
     } else if (beforeReceiver && uses("finesse") && finesseFits(read, chain, seat, card)) {
       const id = finessePosition({ ...table, finessed: [...table.finessed, ...finessed] }, seat);
       if (id === undefined) continue;
       result.push({
-        connection: { kind: "finesse", seat, card, ids: [id] },
+        connection: { kind: "finesse", seat, card, candidateIds: [id] },
         conventions: ["finesse", "finesse-position"],
       });
     }
@@ -527,7 +537,7 @@ function finesseFits(read: ClueOnTable, chain: Chain, seat: Seat, card: Card): b
   const { table, given, view, uses } = read;
   if (isPlayable(table.moment, card)) return true;
   if (!uses("multi-finesse") && !uses("prompt-plus-finesse")) return false;
-  if (chain.prompts + finesseCount(chain) === 0) return false;
+  if (chain.connections.every(({ kind }) => kind === "delayed")) return false;
   const seats = seatsAfter(given.giver, view.config.numPlayers);
   return chain.connections.every(
     (connection) => seats.indexOf(connection.seat) <= seats.indexOf(seat),
@@ -644,7 +654,7 @@ const playedElsewhere = (event: GameEvent, connection: Connection) =>
   event.type === "play" &&
   event.success &&
   sameCard(event.card, connection.card) &&
-  !connection.ids.includes(event.cardId);
+  !connection.candidateIds.includes(event.cardId);
 
 /** The cards in `connection`'s hand that could still be its card, leftmost first. */
 export function connectingCards(
@@ -652,7 +662,7 @@ export function connectingCards(
   connection: Connection,
 ): CardId[] {
   const hand = table.moment.hands[connection.seat]!;
-  return connection.ids.filter(
+  return connection.candidateIds.filter(
     (id) => hand.includes(id) && couldBe(table.common[id]!, connection.card),
   );
 }
@@ -722,7 +732,7 @@ function finessedBy(table: Table, live: readonly Interpretation[]): CardId[] {
   const finesses = live.map((interpretation) =>
     interpretation.connections
       .filter(({ kind, card }) => kind === "finesse" && !hasPlayed(table.moment, card))
-      .map(({ ids }) => ids[0]!),
+      .map(({ candidateIds }) => candidateIds[0]!),
   );
   return finesses[0]!.filter((id) => inHand.has(id) && finesses.every((ids) => ids.includes(id)));
 }

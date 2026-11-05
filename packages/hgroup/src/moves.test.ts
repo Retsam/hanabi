@@ -286,14 +286,15 @@ describe("clues", () => {
   });
 
   // Cathy's clued 2s are the y2 and g2. Green touches the g2 as well as the g3, which rules the y2
-  // out of the prompt: Cathy plays the g2, then the g3.
+  // out of the prompt: Cathy plays the g2, then the g3. Blue is at 0, so a clued 2 could be the b2
+  // and isn't known to play anyway: they are prompts, not a delayed play clue.
   const twos = deal({
     hands: [
       ["r4", "b3", "p3", "y4", "r5"],
       ["y5", "b4", "p4", "r4", "b5"],
       ["p4", "y2*", "g2*", "g3", "b4"],
     ],
-    stacks: { red: 1, yellow: 1, green: 1, blue: 1, purple: 1 },
+    stacks: { red: 1, yellow: 1, green: 1, blue: 0, purple: 1 },
   });
 
   it("find prompts among the cards the clue leaves", () => {
@@ -314,7 +315,7 @@ describe("clues", () => {
       cards: [twos.cardAt(3, CATHY), twos.cardAt(1, CATHY)],
       text:
         "Cluing number 3 to seat 2 would be read as the red 3 or the yellow 3 or the green 3 or the " +
-        "blue 3 or the purple 3, but the prompt would get seat 2 to play the yellow 2.",
+        "purple 3, but the prompt would get seat 2 to play the yellow 2.",
     });
   });
 

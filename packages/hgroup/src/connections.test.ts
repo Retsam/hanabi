@@ -35,7 +35,10 @@ describe("prompts", () => {
       ]),
     ).toEqual([
       [["r3"], []],
-      [["r4"], [{ kind: "prompt", seat: BOB, card: { suit: "red", rank: 3 }, ids: [bobsRed] }]],
+      [
+        ["r4"],
+        [{ kind: "prompt", seat: BOB, card: { suit: "red", rank: 3 }, candidateIds: [bobsRed] }],
+      ],
     ]);
     expect(reading.conventions).toContain("prompt");
     // Bob has a red card that could be the r3, so his finesse position is not considered.
@@ -74,7 +77,10 @@ describe("prompts", () => {
       stacks: { red: 2, yellow: 2, green: 2, blue: 2, purple: 2 },
     }).clue(CATHY, "red");
     const [, prompted] = read(game, BOB).readings[0]!.interpretations;
-    expect(prompted!.connections[0]!.ids).toEqual([game.cardAt(3, BOB), game.cardAt(4, BOB)]);
+    expect(prompted!.connections[0]!.candidateIds).toEqual([
+      game.cardAt(3, BOB),
+      game.cardAt(4, BOB),
+    ]);
     // Bob knows one of them is the r3 but not which, so neither card is pinned down. (Neither is
     // the r4, since he sees Cathy's.)
     expect(own(game, BOB, game.cardAt(3, BOB))).toEqual(["r3", "r5"]);
@@ -138,7 +144,12 @@ describe("finesses", () => {
     const reading = lastReading(finesse, ALICE);
     expect(reading.play).toEqual(["r3", "r4"]);
     expect(reading.interpretations[1]!.connections).toEqual([
-      { kind: "finesse", seat: BOB, card: { suit: "red", rank: 3 }, ids: [bobsFinessePosition] },
+      {
+        kind: "finesse",
+        seat: BOB,
+        card: { suit: "red", rank: 3 },
+        candidateIds: [bobsFinessePosition],
+      },
     ]);
     expect(reading.conventions).toEqual(expect.arrayContaining(["finesse", "finesse-position"]));
   });
@@ -189,7 +200,10 @@ describe("finesses", () => {
     // Bob did not blind-play after Alice's red clue, so Cathy's slot 1 is the r1.
     expect(names(knowledge.common[game.cardAt(0, CATHY)]!)).toEqual(["r1"]);
     const [, finessed] = knowledge.readings[1]!.interpretations;
-    expect(finessed!.connections[0]).toMatchObject({ seat: CATHY, ids: [game.cardAt(2, CATHY)] });
+    expect(finessed!.connections[0]).toMatchObject({
+      seat: CATHY,
+      candidateIds: [game.cardAt(2, CATHY)],
+    });
     expect(own(game, CATHY, game.cardAt(2, CATHY))).toEqual(["b1"]);
   });
 
@@ -278,13 +292,13 @@ describe("chains of connections", () => {
         kind: "prompt",
         seat: BOB,
         card: { suit: "yellow", rank: 3 },
-        ids: [doublePrompt.cardAt(1, BOB), doublePrompt.cardAt(2, BOB)],
+        candidateIds: [doublePrompt.cardAt(1, BOB), doublePrompt.cardAt(2, BOB)],
       },
       {
         kind: "prompt",
         seat: BOB,
         card: { suit: "yellow", rank: 4 },
-        ids: [doublePrompt.cardAt(2, BOB)],
+        candidateIds: [doublePrompt.cardAt(2, BOB)],
       },
     ]);
     // Bob's two unclued cards could also be a Double Finesse on any other 5 (`multi-finesse`).
@@ -364,13 +378,13 @@ describe("finesse chains (level 2)", () => {
         kind: "finesse",
         seat: BOB,
         card: { suit: "red", rank: 2 },
-        ids: [acrossPlayers.cardAt(0, BOB)],
+        candidateIds: [acrossPlayers.cardAt(0, BOB)],
       },
       {
         kind: "finesse",
         seat: CATHY,
         card: { suit: "red", rank: 3 },
-        ids: [acrossPlayers.cardAt(0, CATHY)],
+        candidateIds: [acrossPlayers.cardAt(0, CATHY)],
       },
     ]);
   });
@@ -410,7 +424,7 @@ describe("finesse chains (level 2)", () => {
     const double = read(sameHand, ALICE, 2).readings[0]!.interpretations.find(
       (i) => i.focusIdentity.rank === 3,
     )!;
-    expect(double.connections.map(({ seat, ids }) => [seat, ids])).toEqual([
+    expect(double.connections.map(({ seat, candidateIds }) => [seat, candidateIds])).toEqual([
       [BOB, [sameHand.cardAt(0, BOB)]],
       [BOB, [sameHand.cardAt(1, BOB)]],
     ]);
@@ -477,7 +491,9 @@ describe("finesse chains (level 2)", () => {
       (i) => i.focusIdentity.rank === 4,
     )!;
     expect(both.conventions).toContain("prompt-plus-finesse");
-    expect(both.connections.map(({ kind, seat, ids }) => [kind, seat, ids])).toEqual([
+    expect(
+      both.connections.map(({ kind, seat, candidateIds }) => [kind, seat, candidateIds]),
+    ).toEqual([
       ["prompt", BOB, [promptFinesse.cardAt(3, BOB)]],
       ["finesse", BOB, [promptFinesse.cardAt(0, BOB)]],
     ]);

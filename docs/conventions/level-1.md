@@ -154,7 +154,7 @@ If every interpretation is ruled out, a teammate broke a convention: the cards k
   The missing card must be playable now.
 - **Rules out:** the finesse, if that player's next turn is not the blind-play (finesses are urgent).
 - **Limit:** self-finesses (on the receiver) and reverse finesses (on a player after the receiver) are
-  level 2, so they are not read at level 1. See [level-2.md](./level-2.md#reverse-finesse).
+  level 2, so they are not read at level 1. See [level-2.md](./level-2.md#reverse-finesse) and [`self-finesse`](./level-2.md#self-finesse).
 
 ## `finesse-position`
 

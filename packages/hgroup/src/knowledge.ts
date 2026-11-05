@@ -469,7 +469,9 @@ function allows({ uses }: ClueOnTable, chain: Chain): boolean {
  *   it is a delayed play clue, not a prompt.
  * - A finesse: a seat that plays after the giver and before the receiver has no such clued card
  *   (`prompts-before-finesses`), so their finesse position blind-plays. At level 2 the seat can
- *   also play after the receiver (`reverse-finesse`): the receiver waits for it. Either `card` is playable
+ *   also play after the receiver (`reverse-finesse`): the receiver waits for it, or be the receiver
+ *   (`self-finesse`), who only reads it when nothing else fits (see `fitting`), and never when
+ *   another seat has a clued card that could be `card`. Either `card` is playable
  *   now, or (level 2) it will be once the chain's prompts and finesses have played, and the seat
  *   plays no earlier than the seats holding them. A seat finessed twice blind-plays its finesse
  *   positions left to right.
@@ -499,6 +501,7 @@ function connectionsFor(
   for (const seat of seats) {
     const beforeReceiver = seats.indexOf(seat) < seats.indexOf(given.target);
     const afterReceiver = seats.indexOf(seat) > seats.indexOf(given.target);
+    const isReceiver = seat === given.target;
     const ids = moment.hands[seat]!.filter(
       (id) =>
         id !== focus && !prompted.has(id) && isClued(moment, id) && couldBe(common[id]!, card),
@@ -519,7 +522,9 @@ function connectionsFor(
       };
       result.push({ connection, conventions });
     } else if (
-      (beforeReceiver || (afterReceiver && uses("reverse-finesse"))) &&
+      (beforeReceiver ||
+        (afterReceiver && uses("reverse-finesse")) ||
+        (isReceiver && uses("self-finesse"))) &&
       uses("finesse") &&
       finesseFits(read, chain, seat, card)
     ) {
@@ -527,10 +532,14 @@ function connectionsFor(
       if (id === undefined) continue;
       const conventions: ConventionId[] = ["finesse", "finesse-position"];
       if (afterReceiver) conventions.push("reverse-finesse");
+      if (isReceiver) conventions.push("self-finesse");
       result.push({ connection: { kind: "finesse", seat, card, candidateIds: [id] }, conventions });
     }
   }
-  return result;
+  // The receiver waits for a clued card elsewhere that could be `card` before finessing
+  // themselves for it, and that card may well play first: the giver doesn't ask for that.
+  const clued = result.some(({ connection }) => connection.kind !== "finesse");
+  return clued ? result.filter(({ conventions }) => !conventions.includes("self-finesse")) : result;
 }
 
 /**
@@ -851,6 +860,7 @@ export function privateKnowledge(view: Sight, knowledge: Knowledge): Note[] {
     // can't take the last copy of its identity: that other card is bad touched instead.
     const settled: Sight = {
       config: view.config,
+      seat: view.seat,
       cards: view.cards.map((cardView) => {
         const note = notes[cardView.id]!;
         return cardView.card === null && read.has(cardView.id) && note.length === 1
@@ -877,9 +887,26 @@ function twoSaveSeen(view: Sight, reading: ClueReading, interpretation: Interpre
 }
 
 /**
+ * What `reading`'s receiver makes of `interpretations`: they only read a Self-Finesse (one that
+ * finesses them) when nothing else is left (`self-finesse`).
+ */
+export function asReceiver(
+  reading: ClueReading,
+  interpretations: readonly Interpretation[],
+): Interpretation[] {
+  const isSelfFinesse = (interpretation: Interpretation) =>
+    interpretation.connections.some(
+      ({ kind, seat }) => kind === "finesse" && seat === reading.target,
+    );
+  const others = interpretations.filter((interpretation) => !isSelfFinesse(interpretation));
+  return others.length > 0 ? others : [...interpretations];
+}
+
+/**
  * A reading's pending interpretations that fit `known` (what one player knows about each card):
  * the focus can be the card the interpretation says, it isn't a 2 Save the viewer can tell the giver
- * wouldn't give, and every connecting card can still be where it was promised.
+ * wouldn't give, and every connecting card can still be where it was promised. The receiver only
+ * reads a Self-Finesse when nothing else fits (`self-finesse`).
  */
 export function fitting(
   view: Sight,
@@ -888,7 +915,7 @@ export function fitting(
   known: readonly Note[],
 ): Interpretation[] {
   const could = (id: CardId, card: Card) => couldBe(known[id]!, card);
-  return pending(reading).filter(
+  const fits = pending(reading).filter(
     (interpretation) =>
       could(reading.focus, interpretation.focusIdentity) &&
       !twoSaveSeen(view, reading, interpretation) &&
@@ -898,6 +925,7 @@ export function fitting(
           connectingCards(table, connection).some((id) => could(id, connection.card)),
       ),
   );
+  return view.seat === reading.target ? asReceiver(reading, fits) : fits;
 }
 
 export type TableFacts = ReturnType<typeof tableFacts>;

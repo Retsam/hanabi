@@ -14,7 +14,7 @@ import {
  * What one seat can see: every card's clues, and its identity where the seat can see it. A
  * `PlayerView` is one; a seat working out what a teammate sees can build another.
  */
-export type Sight = Pick<PlayerView, "config" | "cards">;
+export type Sight = Pick<PlayerView, "config" | "cards" | "seat">;
 
 /** Every distinct card identity in the config, in suit then rank order. */
 export function identities(config: GameConfig): Card[] {

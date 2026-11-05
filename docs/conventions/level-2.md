@@ -3,7 +3,7 @@
 Specs for the level 2 conventions `@hanabi/hgroup` implements so far, by their ids in
 [H-GROUP-LEVELS.md](../H-GROUP-LEVELS.md), in the same shape as [level-1.md](./level-1.md). The site's
 content is CC BY-SA 4.0. The tests are in `packages/hgroup/src/stall.test.ts` (`5-stall`) and
-`packages/hgroup/src/connections.test.ts` (prompts and finesses, including reverse finesses).
+`packages/hgroup/src/connections.test.ts` (prompts and finesses, including reverse and self-finesses).
 
 ## `5-stall`
 
@@ -93,6 +93,35 @@ content is CC BY-SA 4.0. The tests are in `packages/hgroup/src/stall.test.ts` (`
   isn't there, or it's in their own hand) has nothing to wait for, so the receiver only waits when
   the card is visible to them. Common knowledge keeps longer chains open (Cathy finessed again for
   the r3 and on), as for `multi-finesse`; the players rule them out from the cards they see.
+
+## `self-finesse`
+
+- **Source:** [level 2](https://hanabi.github.io/level-2#the-self-finesse).
+- **Reading:** a finesse as in [level-1.md](./level-1.md#finesse), but on the receiver's own finesse
+  position. It combines with the other level 2 chains, like `reverse-finesse`.
+- **Receiver:** reads a Self-Finesse only when nothing else fits: a direct play clue, a prompt, or a
+  finesse on another player (before or after them) comes first. So the receiver waits while another
+  player could still blind-play, and blind-plays once every other reading is ruled out. In the site's
+  example Cathy sees no 2 on Bob's finesse position, so after Bob's turn she blind-plays her finesse
+  position as any 2. It is the r2, so her 3 is the r3.
+- **Others:** the fallback is only the receiver's. A player who sees the connecting card on the
+  receiver's finesse position doesn't blind-play for it, because it may be the receiver's: in the
+  example Bob sees Cathy's r2 and discards.
+- **Ranking:** the giver's clue is a misread when the receiver would fall back on something else.
+  A 3 clue meant as a Self-Finesse on the r3 while the y3 is playable is read as the y3. Clues read
+  as a Self-Finesse are labelled `self-finesse`, ahead of the other level 2 chain conventions.
+  The Save Principle's check of what the next player knows applies the same fallback when they are
+  the receiver.
+- **Judgment calls:** a Self-Finesse is never read for a card that another player's clued card could
+  be. The receiver would wait for that prompt, and the prompted card may well play first, so the
+  giver can't count on the Self-Finesse (the site says the receiver waits "until the other player
+  has had a chance to play", but a later fallback after a failed prompt isn't read). The fallback
+  works on what the receiver can rule out from what they see, so a
+  finesse on another player whose finesse position visibly isn't the card doesn't hold them back.
+  Move ranking judges the receiver's reading as of the clue, so a Self-Finesse that the receiver
+  would only reach after another player's turn (Bob holding a 2 on his finesse position too) is
+  flagged as a misread, which is conservative. Common knowledge keeps Self-Finesse readings, so
+  tests that list a clue's interpretations now also see them.
 
 ## Owed plays
 

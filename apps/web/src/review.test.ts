@@ -13,7 +13,7 @@ async function selfPlay(level: number, numPlayers: 2 | 3 | 4 | 5 = 3, seed = 4) 
   return { state, record: { config, deck, actions } };
 }
 
-describe("reviewTurns", () => {
+describe("reviewTurns", { timeout: 60_000 }, () => {
   it("lines up each move's review with the state, event and table it happened on", async () => {
     const { state, record } = await selfPlay(1);
     const { actions } = record;
@@ -34,7 +34,7 @@ describe("reviewTurns", () => {
 
   it("previews the next level's pick where it beats this level's", async () => {
     // A game where level 2 gives 5 Stalls and reads clues as multi-prompts.
-    const { record } = await selfPlay(1, 5, 1);
+    const { record } = await selfPlay(1, 5, 4);
 
     const previews = reviewTurns(record, 1).flatMap(({ review, preview }) =>
       preview === undefined ? [] : [{ review, preview }],

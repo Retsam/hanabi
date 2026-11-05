@@ -312,13 +312,9 @@ describe("chains of connections", () => {
       },
     ]);
     // Bob's two unclued cards could also be a Double Finesse on any other 5 (`multi-finesse`).
-    expect(names(reading.interpretations.map((i) => i.focusIdentity))).toEqual([
-      "r5",
-      "y5",
-      "g5",
-      "b5",
-      "p5",
-    ]);
+    // Self-Finesses on Cathy are read too, but she only falls back on them.
+    const others = reading.interpretations.filter((i) => !i.conventions.includes("self-finesse"));
+    expect(names(others.map((i) => i.focusIdentity))).toEqual(["r5", "y5", "g5", "b5", "p5"]);
   });
 
   it("tell the prompted player to play their cards left to right", () => {
@@ -538,13 +534,17 @@ describe("reverse finesses (level 2)", () => {
 
   it("read a finesse on a player after the receiver at level 2 only", () => {
     const focusNames = (level: number) =>
-      names(read(reverse, ALICE, level).readings[0]!.interpretations.map((i) => i.focusIdentity));
+      names(
+        read(reverse, ALICE, level)
+          .readings[0]!.interpretations.filter((i) => !i.conventions.includes("self-finesse"))
+          .map((i) => i.focusIdentity),
+      );
     expect(focusNames(1)).toEqual(["r1"]);
     // Common knowledge keeps Cathy finessed again for the r3 and on open: only seeing her hand
     // rules that out.
     expect(focusNames(2)).toEqual(["r1", "r2", "r3", "r4", "r5"]);
     const reversed = read(reverse, ALICE, 2).readings[0]!.interpretations.find(
-      (i) => i.focusIdentity.rank === 2,
+      (i) => i.focusIdentity.rank === 2 && i.connections[0]?.seat === CATHY,
     )!;
     expect(reversed.conventions).toContain("reverse-finesse");
     expect(reversed.connections).toEqual([
@@ -568,6 +568,29 @@ describe("reverse finesses (level 2)", () => {
       reasons: [{ convention: "reverse-finesse" }],
     });
     expect(red(1).category).toBe("violates");
+  });
+
+  it("don't hold up a receiver who sees the finesse position isn't the card", () => {
+    // Blue on Bob's b4 and b5 could be a Reverse Finesse on the b5, with Cathy's finesse position
+    // as the b4. Bob sees her r2 there, so he plays his b4 and won't discard his g3 on chop: the
+    // Save Principle doesn't need the g3 saved now.
+    const game = deal({
+      hands: [
+        ["y1", "r5", "y1", "g4", "r4"],
+        ["g1", "r2", "b4", "b5", "g3"],
+        ["r2", "p3", "g4*", "r3", "p4"],
+      ],
+      stacks: { red: 0, yellow: 3, green: 2, blue: 3, purple: 1 },
+      clueTokens: 2,
+    });
+    const blue = rankMoves(playerView(game.state, ALICE), 2).find(
+      ({ action }) =>
+        action.type === "clue" && action.target === BOB && action.clue.value === "blue",
+    )!;
+    expect(blue).toMatchObject({
+      category: "mandated",
+      reasons: [{}, { convention: "save-principle" }],
+    });
   });
 
   it("make the receiver wait while the finesse position they see could connect", () => {
@@ -609,5 +632,119 @@ describe("reverse finesses (level 2)", () => {
     );
     expect(names(bob[red]!)).toEqual(["r1"]);
     expect(playing(cathyDiscarded, red).reasons[0]!.text).toBe("The card is known to be playable.");
+  });
+});
+
+describe("self-finesses (level 2)", () => {
+  /** How `seat` would judge the clue `value` to `target`, at `level`. */
+  const judging = (game: ReturnType<typeof deal>, target: number, value: number, level = 2) =>
+    rankMoves(playerView(game.state, game.state.currentPlayer), level).find(
+      ({ action }) =>
+        action.type === "clue" && action.target === target && action.clue.value === value,
+    )!;
+
+  // level-2#the-self-finesse: every 1 is played, and Alice's 3 clue touches Cathy's r3. Nobody else
+  // has a 2 on their finesse position, so Cathy's finesse position must be one.
+  const beforeClue = deal({
+    hands: [
+      ["g4", "b4", "y4", "p4", "g5"],
+      ["y4", "b5", "y5", "p5", "r4"],
+      ["r2", "r3", "g4", "p4", "b4"],
+    ],
+    stacks: { red: 1, yellow: 1, green: 1, blue: 1, purple: 1 },
+    clueTokens: 6,
+  });
+  const selfFinesse = beforeClue.clue(CATHY, 3);
+  const cathysThree = selfFinesse.cardAt(1, CATHY);
+
+  it("are a permitted clue at level 2, and a misread at level 1", () => {
+    expect(judging(beforeClue, CATHY, 3)).toMatchObject({
+      category: "permitted",
+      reasons: [{ convention: "self-finesse" }],
+    });
+    expect(judging(beforeClue, CATHY, 3, 1).category).toBe("violates");
+  });
+
+  it("have the receiver blind-play their finesse position when nothing else fits", () => {
+    // Bob sees the r2 on Cathy's finesse position: it's her finesse, not his.
+    expect(top(selfFinesse).action).not.toEqual(playOf(selfFinesse.cardAt(0, BOB)));
+    const bobDiscarded = selfFinesse.discard(4);
+    expect(top(bobDiscarded)).toMatchObject({
+      action: playOf(selfFinesse.cardAt(0, CATHY)),
+      category: "mandated",
+      reasons: [{ convention: "finesse" }],
+    });
+    // The 2 plays as the r2, so her 3 is the r3.
+    const cathyPlayed = bobDiscarded.play(0);
+    const cathy = privateKnowledge(
+      playerView(cathyPlayed.state, CATHY),
+      read(cathyPlayed, CATHY, 2),
+    );
+    expect(names(cathy[cathysThree]!)).toEqual(["r3"]);
+  });
+
+  it("come after finesses on other players", () => {
+    // Bob has the y2 on his finesse position, so Cathy waits to see whether he blind-plays it.
+    const bobHasTwoBefore = deal({
+      hands: [
+        ["g4", "b4", "y4", "p4", "g5"],
+        ["y2", "b5", "y5", "p5", "r4"],
+        ["r2", "r3", "g4", "p4", "b4"],
+      ],
+      stacks: { red: 1, yellow: 1, green: 1, blue: 1, purple: 1 },
+      clueTokens: 6,
+    });
+    // Move ranking judges Cathy's reading as of the clue, so Alice's clue counts as a misread.
+    expect(judging(bobHasTwoBefore, CATHY, 3).category).toBe("violates");
+    const bobHasTwo = bobHasTwoBefore.clue(CATHY, 3);
+    const cathy = (game: ReturnType<typeof deal>) =>
+      privateKnowledge(playerView(game.state, CATHY), read(game, CATHY, 2));
+    expect(names(cathy(bobHasTwo)[cathysThree]!)).toEqual(["y3"]);
+    // Bob doesn't blind-play, so the finesse is hers.
+    const bobDiscarded = bobHasTwo.discard(4);
+    expect(names(cathy(bobDiscarded)[cathysThree]!)).toEqual(["r3", "y3", "g3", "b3", "p3"]);
+    expect(top(bobDiscarded)).toMatchObject({
+      action: playOf(bobHasTwo.cardAt(0, CATHY)),
+      category: "mandated",
+    });
+  });
+
+  it("are not read for a card another player's clued card could be", () => {
+    // Bob's clued 2 could be any 2 (and plays anyway), so Cathy is never finessed for one.
+    const prompted = deal({
+      hands: [
+        ["g4", "b4", "y4", "p4", "g5"],
+        ["y4", "b5", "y2*", "p5", "r4"],
+        ["r2", "r3", "g4", "p4", "b4"],
+      ],
+      stacks: { red: 1, yellow: 1, green: 1, blue: 1, purple: 1 },
+      clueTokens: 6,
+    }).clue(CATHY, 3);
+    const conventions = read(prompted, ALICE, 2).readings[0]!.interpretations.flatMap(
+      (i) => i.conventions,
+    );
+    expect(conventions).toContain("delayed-play-clue");
+    expect(conventions).not.toContain("self-finesse");
+  });
+
+  it("come after direct play clues", () => {
+    // The y3 is playable, so Cathy reads the 3 clue as a play clue on it and plays her r3.
+    const direct = deal({
+      hands: [
+        ["g4", "b4", "y4", "p4", "g5"],
+        ["y4", "b5", "y5", "p5", "r4"],
+        ["r2", "r3", "g4", "p4", "b4"],
+      ],
+      stacks: { red: 1, yellow: 2, green: 1, blue: 1, purple: 1 },
+      clueTokens: 6,
+    });
+    expect(judging(direct, CATHY, 3)).toMatchObject({
+      category: "violates",
+      reasons: [
+        {
+          text: "Cluing number 3 to seat 2 would be read as the yellow 3, but the card is the red 3.",
+        },
+      ],
+    });
   });
 });

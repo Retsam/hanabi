@@ -36,7 +36,7 @@ describe("reviewTurns", { timeout: 20_000 }, () => {
 
   it("previews the next level's pick where it beats this level's", async () => {
     // A game where level 2 gives 5 Stalls and reads clues as multi-prompts.
-    const { record } = await selfPlay(1, 5, 1);
+    const { record } = await selfPlay(1, 5, 4);
 
     const previews = reviewTurns(record, 1).flatMap(({ review, preview }) =>
       preview === undefined ? [] : [{ review, preview }],

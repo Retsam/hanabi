@@ -559,9 +559,9 @@ const SAVES: readonly ConventionId[] = ["5-save", "2-save", "critical-save", "5-
  */
 function mainConvention(interpretation: Interpretation): ConventionId {
   const { conventions } = interpretation;
-  const combined = (["prompt-plus-finesse", "multi-finesse", "multi-prompt"] as const).find((id) =>
-    conventions.includes(id),
-  );
+  const combined = (
+    ["reverse-finesse", "prompt-plus-finesse", "multi-finesse", "multi-prompt"] as const
+  ).find((id) => conventions.includes(id));
   if (combined !== undefined) return combined;
   // Cards that play anyway make it a delayed play clue, below, unless a prompt or finesse follows.
   const [played] = interpretation.connections.flatMap(({ kind }) =>

@@ -12,6 +12,16 @@ const BOB = 1;
 const CATHY = 2;
 const DONALD = 3;
 
+/** The top-ranked move for whoever is to play, at level 2. */
+const top = (game: ReturnType<typeof deal>) =>
+  rankMoves(playerView(game.state, game.state.currentPlayer), 2)[0]!;
+const playOf = (id: number) => ({ type: "play", cardId: id });
+/** How the player to move would judge playing `id`, at level 2. */
+const playing = (game: ReturnType<typeof deal>, id: number) =>
+  rankMoves(playerView(game.state, game.state.currentPlayer), 2).find(
+    ({ action }) => action.type === "play" && action.cardId === id,
+  )!;
+
 describe("prompts", () => {
   // beginner/prompt, first example: Alice's red clue on Cathy's r4 prompts Bob's red card.
   const prompt = deal({
@@ -337,16 +347,6 @@ describe("chains of connections", () => {
 });
 
 describe("finesse chains (level 2)", () => {
-  /** The top-ranked move for whoever is to play, at level 2. */
-  const top = (game: ReturnType<typeof deal>) =>
-    rankMoves(playerView(game.state, game.state.currentPlayer), 2)[0]!;
-  const playOf = (id: number) => ({ type: "play", cardId: id });
-  /** How the player to move would judge playing `id`, at level 2. */
-  const playing = (game: ReturnType<typeof deal>, id: number) =>
-    rankMoves(playerView(game.state, game.state.currentPlayer), 2).find(
-      ({ action }) => action.type === "play" && action.cardId === id,
-    )!;
-
   // level-2#the-double-finesse, first example: Alice's red clue on Donald's r4 finesses Bob's r2
   // and then Cathy's r3.
   const acrossPlayers = deal({
@@ -520,5 +520,94 @@ describe("finesse chains (level 2)", () => {
     const finessed = waited.play(1);
     const after = privateKnowledge(playerView(finessed.state, CATHY), read(finessed, CATHY, 2));
     expect(names(after[cathysFour]!)).toEqual(["r4"]);
+  });
+});
+
+describe("reverse finesses (level 2)", () => {
+  // level-2#the-reverse-finesse, first example: Alice's red clue touches Bob's r2, and Cathy, who
+  // plays after Bob, has the r1 on her finesse position. Bob waits for her.
+  const beforeClue = deal({
+    hands: [
+      ["y3", "g3", "b3", "p3", "y4"],
+      ["g4", "b4", "r2", "p4", "y5"],
+      ["r1", "g2", "b2", "p2", "y2"],
+    ],
+  });
+  const reverse = beforeClue.clue(BOB, "red");
+  const bobsRed = reverse.cardAt(2, BOB);
+
+  it("read a finesse on a player after the receiver at level 2 only", () => {
+    const focusNames = (level: number) =>
+      names(read(reverse, ALICE, level).readings[0]!.interpretations.map((i) => i.focusIdentity));
+    expect(focusNames(1)).toEqual(["r1"]);
+    // Common knowledge keeps Cathy finessed again for the r3 and on open: only seeing her hand
+    // rules that out.
+    expect(focusNames(2)).toEqual(["r1", "r2", "r3", "r4", "r5"]);
+    const reversed = read(reverse, ALICE, 2).readings[0]!.interpretations.find(
+      (i) => i.focusIdentity.rank === 2,
+    )!;
+    expect(reversed.conventions).toContain("reverse-finesse");
+    expect(reversed.connections).toEqual([
+      {
+        kind: "finesse",
+        seat: CATHY,
+        card: { suit: "red", rank: 1 },
+        candidateIds: [reverse.cardAt(0, CATHY)],
+      },
+    ]);
+  });
+
+  it("are a permitted clue at level 2, and a misread at level 1", () => {
+    const red = (level: number) =>
+      rankMoves(playerView(beforeClue.state, ALICE), level).find(
+        ({ action }) =>
+          action.type === "clue" && action.target === BOB && action.clue.value === "red",
+      )!;
+    expect(red(2)).toMatchObject({
+      category: "permitted",
+      reasons: [{ convention: "reverse-finesse" }],
+    });
+    expect(red(1).category).toBe("violates");
+  });
+
+  it("make the receiver wait while the finesse position they see could connect", () => {
+    const bob = privateKnowledge(playerView(reverse.state, BOB), read(reverse, BOB, 2));
+    expect(names(bob[bobsRed]!)).toEqual(["r1", "r2"]);
+    expect(top(reverse).action).not.toEqual(playOf(bobsRed));
+  });
+
+  it("have the finessed player blind-play, which tells the receiver their card", () => {
+    const bobWaited = reverse.discard(4);
+    expect(top(bobWaited)).toMatchObject({
+      action: playOf(reverse.cardAt(0, CATHY)),
+      category: "mandated",
+      reasons: [{ convention: "finesse" }],
+    });
+    const cathyPlayed = bobWaited.play(0);
+    const bob = privateKnowledge(playerView(cathyPlayed.state, BOB), read(cathyPlayed, BOB, 2));
+    expect(names(bob[bobsRed]!)).toEqual(["r2"]);
+  });
+
+  it("are ruled out when the finessed player does something else", () => {
+    // level-2#the-reverse-finesse, second example: Bob's red card is the r1, so Cathy, who sees
+    // it, doesn't blind-play, and then Bob knows his card.
+    const direct = deal({
+      hands: [
+        ["y3", "g3", "b3", "p3", "y4"],
+        ["g4", "b4", "r1", "p4", "y5"],
+        ["r1", "g2", "b2", "p2", "y2"],
+      ],
+      clueTokens: 6,
+    }).clue(BOB, "red");
+    const red = direct.cardAt(2, BOB);
+    const bobWaited = direct.discard(4);
+    expect(top(bobWaited).action).not.toEqual(playOf(direct.cardAt(0, CATHY)));
+    const cathyDiscarded = bobWaited.discard(4).discard(4);
+    const bob = privateKnowledge(
+      playerView(cathyDiscarded.state, BOB),
+      read(cathyDiscarded, BOB, 2),
+    );
+    expect(names(bob[red]!)).toEqual(["r1"]);
+    expect(playing(cathyDiscarded, red).reasons[0]!.text).toBe("The card is known to be playable.");
   });
 });

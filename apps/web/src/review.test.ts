@@ -13,7 +13,9 @@ async function selfPlay(level: number, numPlayers: 2 | 3 | 4 | 5 = 3, seed = 4) 
   return { state, record: { config, deck, actions } };
 }
 
-describe("reviewTurns", () => {
+// Each test self-plays and reviews whole games, a few seconds apiece: past the default 5s on a busy CI
+// runner.
+describe("reviewTurns", { timeout: 20_000 }, () => {
   it("lines up each move's review with the state, event and table it happened on", async () => {
     const { state, record } = await selfPlay(1);
     const { actions } = record;

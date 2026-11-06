@@ -159,8 +159,30 @@ describe("plays", () => {
     });
     const [why] = judged(game, { type: "play", cardId: game.cardAt(2) }).reasons;
     expect(why!.misplays).toEqual(
-      (["yellow", "green", "blue", "purple"] as const).map((suit) => ({ suit, rank: 3 })),
+      (["yellow", "green", "blue", "purple"] as const).map((suit) => ({ card: { suit, rank: 3 } })),
     );
+  });
+
+  it("say which interpretation of a clue would make the card one that misplays", () => {
+    // Alice's red clue on Bob's card is a play clue on the r2, or a Reverse Finesse on Cathy's r2
+    // and the r3. Bob sees the r2 on Cathy's finesse position, so he can't tell.
+    const game = deal({
+      hands: [
+        ["y3", "g3", "b3", "p3", "y4"],
+        ["g4", "b4", "r3", "p4", "y4"],
+        ["r2", "g5", "b5", "p5", "y5"],
+      ],
+      stacks: { red: 1 },
+    }).clue(BOB, "red");
+    const [why] = rankMoves(playerView(game.state, BOB), 2).find(
+      (move) => key(move.action) === key({ type: "play", cardId: game.cardAt(2, BOB) }),
+    )!.reasons;
+    expect(why!.misplays).toContainEqual({
+      card: { suit: "red", rank: 3 },
+      interpretation: expect.objectContaining({
+        connections: [expect.objectContaining({ kind: "finesse", seat: CATHY })],
+      }),
+    });
   });
 
   it("are permitted for a card the player knows is playable", () => {

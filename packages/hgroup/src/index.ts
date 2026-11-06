@@ -31,5 +31,5 @@ export {
   readGame,
   type Table,
 } from "./knowledge.ts";
-export { type Category, rankMoves, type RankedMove, type Reason } from "./moves.ts";
+export { type Category, type Misplay, rankMoves, type RankedMove, type Reason } from "./moves.ts";
 export { reviewGame, reviewMove, sameAction, type TurnReview } from "./review.ts";

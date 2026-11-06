@@ -1,9 +1,9 @@
 // The review screen: step through a finished game, seeing each move from its player's view with how
 // the decision engine judged it and what it would have done instead.
 import { type CardId, playerView, type PlayerView, type Replay, type Seat } from "@hanabi/engine";
-import type { Category, Level, RankedMove } from "@hanabi/hgroup";
+import type { Category, Level, Misplay, RankedMove } from "@hanabi/hgroup";
 import { useEffect, useState } from "react";
-import { cardList, cardName, describeAction, describeEvent, seatName } from "./describe.ts";
+import { describeAction, describeEvent, describeMisplay, seatName } from "./describe.ts";
 import { type ReviewedTurn, reviewTurns, type Standing, standing } from "./review.ts";
 import { Table } from "./Table.tsx";
 
@@ -95,7 +95,7 @@ export function Review(props: { replay: Replay; level: Level; you: Seat }) {
               {review.seat === you ? "you" : "they"} saw the table
             </h2>
             <p className="move">{describeEvent(you, event, moment, chop)}</p>
-            <Judged move={review.move} />
+            <Judged move={review.move} you={you} />
             <p className="rank">
               Ranked {review.rank} of {review.moves} legal moves
               {standing(review) === "forced" && ", so every move breaks a convention"}
@@ -106,7 +106,7 @@ export function Review(props: { replay: Replay; level: Level; you: Seat }) {
                   {review.rank > 1 ? "Engine's pick" : "Runner-up"}:{" "}
                   {describeAction(you, actorView, review.alternative.action)}
                 </summary>
-                <Judged move={review.alternative} />
+                <Judged move={review.alternative} you={you} />
               </details>
             )}
             {preview !== undefined && (
@@ -115,7 +115,7 @@ export function Review(props: { replay: Replay; level: Level; you: Seat }) {
                   <span className="preview-mark">L{preview.level}</span> Level {preview.level} would
                   pick: {describeAction(you, actorView, preview.move.action)}
                 </summary>
-                <Judged move={preview.move} />
+                <Judged move={preview.move} you={you} />
                 <p className="rank">
                   Ranked {preview.rank} of {review.moves} at level {props.level}
                 </p>
@@ -130,7 +130,7 @@ export function Review(props: { replay: Replay; level: Level; you: Seat }) {
   );
 }
 
-function Judged({ move }: { move: RankedMove }) {
+function Judged({ move, you }: { move: RankedMove; you: Seat }) {
   return (
     <>
       <span className={`badge ${move.category}`}>{CATEGORY[move.category]}</span>
@@ -139,16 +139,31 @@ function Judged({ move }: { move: RankedMove }) {
           <li key={i}>
             {reason.text}
             {reason.convention !== null && <code> {reason.convention}</code>}
-            {reason.misplays !== undefined && (
-              <span className="misplays" title={reason.misplays.map(cardName).join(", ")}>
-                {" "}
-                It could be {cardList(reason.misplays)}.
-              </span>
-            )}
+            {reason.misplays !== undefined && <Misplays misplays={reason.misplays} you={you} />}
           </li>
         ))}
       </ul>
     </>
+  );
+}
+
+/** How many of a play's misplays to list before "+N more". */
+const MISPLAYS_SHOWN = 3;
+
+/** What a card not known to be playable could be instead, one per line. */
+function Misplays({ misplays, you }: { misplays: readonly Misplay[]; you: Seat }) {
+  const lines = misplays.map((misplay) => describeMisplay(you, misplay));
+  const hidden = lines.slice(MISPLAYS_SHOWN);
+  return (
+    <div className="misplays">
+      It could be:
+      <ul>
+        {lines.slice(0, MISPLAYS_SHOWN).map((line, i) => (
+          <li key={i}>{line}</li>
+        ))}
+        {hidden.length > 0 && <li title={hidden.join("\n")}>+{hidden.length} more</li>}
+      </ul>
+    </div>
   );
 }
 

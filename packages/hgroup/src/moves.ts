@@ -52,7 +52,17 @@ export interface Reason {
    * For a play not known to be playable, the identities the player couldn't rule out that would
    * misplay, in suit then rank order.
    */
-  readonly misplays?: readonly Card[];
+  readonly misplays?: readonly Misplay[];
+}
+
+/** An identity a card could have that wouldn't play, and how a clue would make it that. */
+export interface Misplay {
+  readonly card: Card;
+  /**
+   * The interpretation of a clue on the card that makes it `card`, such as a finesse still waiting
+   * on another player, or none where only the clues' rules-level information allows it.
+   */
+  readonly interpretation?: Interpretation;
 }
 
 /** A legal move, judged. */
@@ -191,9 +201,10 @@ function judgePlay(judge: Judge, id: CardId): RankedMove {
     ]);
   }
   const note = judge.mine[id]!;
-  const misplays = note.filter((card) => !playable(card));
-  if (note.length === 0 || misplays.length > 0) {
-    return move(action, "violates", -40 - misplays.length, [
+  const unplayable = note.filter((card) => !playable(card));
+  if (note.length === 0 || unplayable.length > 0) {
+    const misplays = misplaysOf(judge, id, unplayable);
+    return move(action, "violates", -40 - unplayable.length, [
       {
         ...reason(null, [id], "The card is not known to be playable, so it may misplay."),
         ...(misplays.length > 0 && { misplays }),
@@ -203,6 +214,26 @@ function judgePlay(judge: Judge, id: CardId): RankedMove {
   return move(action, "permitted", 100, [
     reason("play-clue", [id], "The card is known to be playable."),
   ]);
+}
+
+/**
+ * Each of `cards` (what `id` could be that wouldn't play) with the interpretations, of clues
+ * focused on `id`, that the viewer can't rule out and that make the card it: one entry per
+ * interpretation, or a bare entry for a card no interpretation explains.
+ */
+function misplaysOf(judge: Judge, id: CardId, cards: readonly Card[]): Misplay[] {
+  const { knowledge, mine, view } = judge;
+  const live = knowledge.readings
+    .filter((reading) => reading.focus === id)
+    .flatMap((reading) => fitting(view, knowledge, reading, mine));
+  return cards.flatMap((card) => {
+    const ways = uniqBy(
+      live.filter((interpretation) => sameCard(interpretation.focusIdentity, card)),
+      (a, b) =>
+        a.kind === b.kind && JSON.stringify(a.connections) === JSON.stringify(b.connections),
+    );
+    return ways.length > 0 ? ways.map((interpretation) => ({ card, interpretation })) : [{ card }];
+  });
 }
 
 /** Whether some clue's still-possible reading needs `id` to play now as a prompt or finesse. */

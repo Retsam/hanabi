@@ -366,6 +366,11 @@ h2 {
   color: var(--muted);
 }
 
+.reasons .misplays ul {
+  margin: 2px 0;
+  padding-left: 18px;
+}
+
 .reasons code {
   color: var(--muted);
   font-size: 0.75rem;

@@ -22,6 +22,12 @@ export const cardName = (card: Card) => `${card.suit[0]}${card.rank}`;
 
 export const clueName = (clue: Clue) => String(clue.value);
 
+/** Cards in short notation, the first `max` of them, then "+N more" for the rest. */
+export function cardList(cards: readonly Card[], max = 3): string {
+  const shown = cards.slice(0, max).map(cardName).join(", ");
+  return cards.length > max ? `${shown} +${cards.length - max} more` : shown;
+}
+
 /**
  * One line saying what happened, like "Alice clued Bob red on slots 1, 3" or "Bob discarded y2 from
  * slot 4". `moment` is the table the event happened on, for the slots used. `chopId` is the mover's

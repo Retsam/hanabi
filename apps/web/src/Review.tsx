@@ -3,7 +3,7 @@
 import { type CardId, playerView, type PlayerView, type Replay, type Seat } from "@hanabi/engine";
 import type { Category, Level, RankedMove } from "@hanabi/hgroup";
 import { useEffect, useState } from "react";
-import { describeAction, describeEvent, seatName } from "./describe.ts";
+import { cardList, cardName, describeAction, describeEvent, seatName } from "./describe.ts";
 import { type ReviewedTurn, reviewTurns, type Standing, standing } from "./review.ts";
 import { Table } from "./Table.tsx";
 
@@ -139,6 +139,12 @@ function Judged({ move }: { move: RankedMove }) {
           <li key={i}>
             {reason.text}
             {reason.convention !== null && <code> {reason.convention}</code>}
+            {reason.misplays !== undefined && (
+              <span className="misplays" title={reason.misplays.map(cardName).join(", ")}>
+                {" "}
+                It could be {cardList(reason.misplays)}.
+              </span>
+            )}
           </li>
         ))}
       </ul>

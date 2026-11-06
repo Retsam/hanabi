@@ -9,7 +9,7 @@ import type {
   PlayerView,
   Seat,
 } from "@hanabi/engine";
-import { advance, chop, clueMatches, type Level, readGame } from "@hanabi/hgroup";
+import { advance, chop, clueMatches, type Level, type Misplay, readGame } from "@hanabi/hgroup";
 
 const NAMES = ["Alice", "Bob", "Cathy", "Donald", "Emily"];
 
@@ -22,10 +22,21 @@ export const cardName = (card: Card) => `${card.suit[0]}${card.rank}`;
 
 export const clueName = (clue: Clue) => String(clue.value);
 
-/** Cards in short notation, the first `max` of them, then "+N more" for the rest. */
-export function cardList(cards: readonly Card[], max = 3): string {
-  const shown = cards.slice(0, max).map(cardName).join(", ");
-  return cards.length > max ? `${shown} +${cards.length - max} more` : shown;
+/**
+ * What a card could be that would misplay, and how a clue would make it that, like "r3 via finesse
+ * on Cathy (r2)" or "r5 (save)".
+ */
+export function describeMisplay(you: Seat, misplay: Misplay): string {
+  const { card, interpretation } = misplay;
+  if (interpretation === undefined) return cardName(card);
+  if (interpretation.kind === "save") return `${cardName(card)} (save)`;
+  const who = (seat: Seat) => (seat === you ? "you" : seatName(you, seat));
+  const steps = interpretation.connections.map((connection) =>
+    connection.kind === "delayed"
+      ? `${connection.seat === you ? "your" : `${who(connection.seat)}'s`} clued ${cardName(connection.card)}`
+      : `${connection.kind} on ${who(connection.seat)} (${cardName(connection.card)})`,
+  );
+  return steps.length > 0 ? `${cardName(card)} via ${steps.join(", ")}` : cardName(card);
 }
 
 /**

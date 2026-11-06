@@ -1,7 +1,8 @@
 import { history, playerView } from "@hanabi/engine";
 import { deal } from "@hanabi/engine/testing";
 import { describe, expect, it } from "vitest";
-import { cardList, chops, describeAction, describeEvent } from "./describe.ts";
+import type { Connection } from "@hanabi/hgroup";
+import { chops, describeAction, describeEvent, describeMisplay } from "./describe.ts";
 
 const ALICE = 0;
 const BOB = 1;
@@ -56,17 +57,29 @@ describe("describeEvent", () => {
   });
 });
 
-describe("cardList", () => {
-  const cards = (["red", "yellow", "green", "blue", "purple"] as const).map((suit) => ({
-    suit,
-    rank: 3 as const,
-  }));
+describe("describeMisplay", () => {
+  const red = (rank: 1 | 2 | 3 | 4 | 5) => ({ suit: "red", rank }) as const;
+  const play = (connections: Connection[]) =>
+    ({
+      kind: "play",
+      focusIdentity: red(4),
+      connections,
+      conventions: [],
+      ruledOutOn: null,
+    }) as const;
 
-  it("names every card when there are few", () => {
-    expect(cardList(cards.slice(0, 3))).toBe("r3, y3, g3");
+  it("names a card no clue's reading explains", () => {
+    expect(describeMisplay(ALICE, { card: red(3) })).toBe("r3");
   });
 
-  it("truncates after three with a count of the rest", () => {
-    expect(cardList(cards)).toBe("r3, y3, g3 +2 more");
+  it("says which players' prompts and finesses would make it the card", () => {
+    const misplay = {
+      card: red(4),
+      interpretation: play([
+        { kind: "delayed", seat: ALICE, card: red(2), candidateIds: [] },
+        { kind: "finesse", seat: BOB, card: red(3), candidateIds: [] },
+      ]),
+    };
+    expect(describeMisplay(ALICE, misplay)).toBe("r4 via your clued r2, finesse on Bob (r3)");
   });
 });

@@ -1,7 +1,7 @@
 import { history, playerView } from "@hanabi/engine";
 import { deal } from "@hanabi/engine/testing";
 import { describe, expect, it } from "vitest";
-import { chops, describeAction, describeEvent } from "./describe.ts";
+import { cardList, chops, describeAction, describeEvent } from "./describe.ts";
 
 const ALICE = 0;
 const BOB = 1;
@@ -53,5 +53,20 @@ describe("describeEvent", () => {
       "You discarded r1 from slot 1 (!)",
       "Bob discarded r3 from slot 3",
     ]);
+  });
+});
+
+describe("cardList", () => {
+  const cards = (["red", "yellow", "green", "blue", "purple"] as const).map((suit) => ({
+    suit,
+    rank: 3 as const,
+  }));
+
+  it("names every card when there are few", () => {
+    expect(cardList(cards.slice(0, 3))).toBe("r3, y3, g3");
+  });
+
+  it("truncates after three with a count of the rest", () => {
+    expect(cardList(cards)).toBe("r3, y3, g3 +2 more");
   });
 });

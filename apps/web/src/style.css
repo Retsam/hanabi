@@ -362,6 +362,10 @@ h2 {
   font-size: 0.9rem;
 }
 
+.reasons .misplays {
+  color: var(--muted);
+}
+
 .reasons code {
   color: var(--muted);
   font-size: 0.75rem;

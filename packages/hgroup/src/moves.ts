@@ -48,6 +48,11 @@ export interface Reason {
   readonly cards: readonly CardId[];
   /** A default English sentence for it. */
   readonly text: string;
+  /**
+   * For a play not known to be playable, the identities the player couldn't rule out that would
+   * misplay, in suit then rank order.
+   */
+  readonly misplays?: readonly Card[];
 }
 
 /** A legal move, judged. */
@@ -186,9 +191,13 @@ function judgePlay(judge: Judge, id: CardId): RankedMove {
     ]);
   }
   const note = judge.mine[id]!;
-  if (note.length === 0 || !note.every(playable)) {
-    return move(action, "violates", -40 - note.filter((card) => !playable(card)).length, [
-      reason(null, [id], "The card is not known to be playable, so it may misplay."),
+  const misplays = note.filter((card) => !playable(card));
+  if (note.length === 0 || misplays.length > 0) {
+    return move(action, "violates", -40 - misplays.length, [
+      {
+        ...reason(null, [id], "The card is not known to be playable, so it may misplay."),
+        ...(misplays.length > 0 && { misplays }),
+      },
     ]);
   }
   return move(action, "permitted", 100, [

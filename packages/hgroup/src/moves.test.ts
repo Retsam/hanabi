@@ -148,6 +148,21 @@ describe("plays", () => {
     expect(conventions(move)).toEqual([null]);
   });
 
+  it("list the identities that would misplay when the card is not known to be playable", () => {
+    // Alice knows her card is a 3. Only the red 3 plays.
+    const game = deal({
+      hands: [
+        ["y1", "g1", "r3*", "p1", "y2"],
+        ["r4", "g4", "b4", "p4", "y4"],
+      ],
+      stacks: { red: 2 },
+    });
+    const [why] = judged(game, { type: "play", cardId: game.cardAt(2) }).reasons;
+    expect(why!.misplays).toEqual(
+      (["yellow", "green", "blue", "purple"] as const).map((suit) => ({ suit, rank: 3 })),
+    );
+  });
+
   it("are permitted for a card the player knows is playable", () => {
     const game = deal({
       hands: [

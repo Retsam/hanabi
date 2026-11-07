@@ -7,7 +7,7 @@ import {
   score,
 } from "@hanabi/engine";
 import { type Level, MAX_LEVEL } from "@hanabi/hgroup";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { clearGame, loadGame, loadLevel, type SavedGame, saveGame, saveLevel } from "./saved.ts";
 import {
   type PlayerCount,
@@ -17,6 +17,7 @@ import {
   startSession,
 } from "./session.ts";
 import { type CardNote, type Notes, setNote } from "./notes.ts";
+import { Fireworks } from "./Fireworks.tsx";
 import { Review } from "./Review.tsx";
 import { Table } from "./Table.tsx";
 
@@ -103,16 +104,22 @@ function Game({ options, record, onLeave, ...start }: GameStart & { onLeave: () 
   const [reviewing, setReviewing] = useState(false);
   const [abandoning, setAbandoning] = useState(false);
   const [notes, setNotes] = useState<Notes>(start.notes ?? {});
+  const [celebrating, setCelebrating] = useState(false);
+  const stopCelebrating = useCallback(() => setCelebrating(false), []);
   // The session saves after each move from its own callback, which needs the latest notes.
   const notesRef = useRef(notes);
   const session = useRef<Session | null>(null);
 
   useEffect(() => {
     if (abandoned) return undefined;
+    // Only a game that ends while it is being played gets fireworks, not one reloaded already over.
+    let live = false;
     const started = startSession(
       options,
       (next) => {
         setSnapshot(next);
+        if (next.view.status !== "over") live = true;
+        else if (live && score(next.view) === maxScore(next.view.config)) setCelebrating(true);
         saveGame({ options, record: next.record, notes: notesRef.current });
       },
       record,
@@ -148,6 +155,7 @@ function Game({ options, record, onLeave, ...start }: GameStart & { onLeave: () 
   };
   return (
     <div className="game">
+      {celebrating && <Fireworks onDone={stopCelebrating} />}
       <header>
         <span>
           Seed {options.seed}, {options.numPlayers} players, level {options.level}

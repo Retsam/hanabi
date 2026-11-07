@@ -216,6 +216,24 @@ describe("plays", () => {
     });
     expect(judged(game, { type: "play", cardId: game.cardAt(2, BOB) }).category).toBe("violates");
   });
+
+  // From a played game: Alice's 2 Save on Bob's y2 also touches his p2, trash with purple on 2. Good
+  // Touch makes both cards the y2 or g2, but only the focus is surely one of them.
+  it("prefer a card that doesn't rely on a save's Good Touch", () => {
+    const game = deal({
+      hands: [
+        ["r1", "g3", "b3", "y3", "y4"],
+        ["g4", "p2", "r1", "b1", "y2"],
+        ["r4", "g3", "b4", "p4", "y5"],
+      ],
+      stacks: { red: 3, yellow: 1, green: 1, blue: 5, purple: 2 },
+    }).clue(BOB, 2);
+    const focus = judged(game, { type: "play", cardId: game.cardAt(4, BOB) });
+    const other = judged(game, { type: "play", cardId: game.cardAt(1, BOB) });
+    expect(focus).toMatchObject({ category: "permitted", score: 100 });
+    expect(other).toMatchObject({ category: "permitted", score: 90 });
+    expect(other.reasons[0]!.convention).toBe("save-principle");
+  });
 });
 
 describe("discards", () => {

@@ -20,7 +20,8 @@ describe("fireworks", () => {
 
   it("bursts rockets into sparks in the upper part of the screen", () => {
     const show = newShow(800, 600, COLORS);
-    run(show, 2);
+    // The highest rocket climbs for about 2.1s on a 600px screen, and sparks last at least 1.2s.
+    run(show, 3);
     expect(show.sparks.length).toBeGreaterThan(0);
     for (const spark of show.sparks) expect(spark.y).toBeLessThan(600);
   });

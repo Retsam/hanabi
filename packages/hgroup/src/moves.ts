@@ -31,7 +31,7 @@ import {
   type Table,
   type TableFacts,
 } from "./knowledge.ts";
-import { clueMatches, sameCard, type Sight } from "./possibilities.ts";
+import { clueMatches, cluePossibilities, sameCard, type Sight } from "./possibilities.ts";
 import { couldBe, identity, narrowed, type Note } from "./notes.ts";
 import { seatsAfter, uniqBy } from "./util.ts";
 
@@ -219,6 +219,22 @@ function judgePlay(judge: Judge, id: CardId): RankedMove {
         ...reason(null, [id], "The card is not known to be playable, so it may misplay."),
         ...(misplays.length > 0 && { misplays }),
       },
+    ]);
+  }
+  // A card only known playable because Good Touch says a save didn't touch trash plays after the
+  // ones that are surely playable (`save-principle`).
+  const { tentative, badTouched } = judge.knowledge;
+  if (
+    tentative.includes(id) &&
+    !badTouched.includes(id) &&
+    !cluePossibilities(judge.view.config, moment.clues[id]!).every(playable)
+  ) {
+    return move(action, "permitted", 90, [
+      reason(
+        "save-principle",
+        [id],
+        "The card is known to be playable, unless the save that touched it touched trash.",
+      ),
     ]);
   }
   return move(action, "permitted", 100, [

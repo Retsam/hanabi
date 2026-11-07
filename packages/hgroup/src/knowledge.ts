@@ -126,6 +126,13 @@ export interface Knowledge extends Table {
   readonly readings: readonly PastReading[];
   /** The turn the next event happens on: how many events have been read. */
   readonly turn: number;
+  /**
+   * What the clues' touches, Good Touch and revealed cards alone say about each card, indexed by
+   * `CardId`: common knowledge before any interpretation narrows it. When an event rules out an
+   * interpretation, common knowledge is rebuilt from these, so what a wrong reading narrowed (a
+   * failed finesse's blind plays, say) doesn't linger.
+   */
+  readonly clued: readonly Note[];
 }
 
 /** A reading's interpretations that have not been ruled out. */
@@ -210,11 +217,13 @@ export function readGame(view: PlayerView, level: Level): Knowledge {
   // A test scenario can start with cards already discarded: past the Early Game.
   const earlyGame = view.opening.discardPile.length === 0;
   const opening = { level, moment: view.opening, finessed: [], earlyGame };
+  const clued = startingNotes(view, opening.moment);
   const start: Knowledge = {
     ...opening,
-    common: settle(view, { ...opening, common: startingNotes(view, opening.moment) }),
+    common: settle(view, { ...opening, common: clued }),
     readings: [],
     turn: 0,
+    clued,
   };
   return view.log.reduce((knowledge, event) => advance(view, knowledge, event), start);
 }
@@ -230,13 +239,16 @@ export function advance(view: PlayerView, knowledge: Knowledge, event: GameEvent
   const table: Table = { level, moment, finessed, earlyGame, common: knowledge.common };
   let { readings } = knowledge;
   let common: Note[];
+  let clued: Note[];
   if (event.type === "clue") {
     const { seat: giver, target, clue, touched } = event;
     const reading = readClue(view, table, { giver, target, clue, touched });
     readings = [...readings, { ...reading, turn }];
-    common = applyReading(view, table, reading);
+    common = applyReading(view, table, reading, table.common);
+    clued = applyReading(view, table, reading, knowledge.clued);
   } else {
     common = table.common.with(event.cardId, [event.card]);
+    clued = knowledge.clued.with(event.cardId, [event.card]);
   }
   if (event.type === "play" && !event.success) {
     ({ readings, common } = afterStrike(view, table, readings, common, event, turn));
@@ -247,8 +259,8 @@ export function advance(view: PlayerView, knowledge: Knowledge, event: GameEvent
     common,
     earlyGame: earlyGame && event.type !== "discard",
   };
-  const next = resolve(view, after, readings, { turn, event, before: moment });
-  return { ...next.table, readings: next.readings, turn: turn + 1 };
+  const next = resolve(view, after, readings, clued, { turn, event, before: moment });
+  return { ...next.table, readings: next.readings, turn: turn + 1, clued };
 }
 
 /**
@@ -641,10 +653,18 @@ function finesseFits(read: ClueOnTable, chain: Chain, seat: Seat, card: Card): b
   );
 }
 
-/** Common knowledge after `reading`'s clue, on the table it was given on. */
-function applyReading(view: PlayerView, table: Table, reading: ClueReading): Note[] {
+/**
+ * `notes` (common knowledge, or what the clues alone say) after `reading`'s clue, on the table it
+ * was given on.
+ */
+function applyReading(
+  view: PlayerView,
+  table: Table,
+  reading: ClueReading,
+  notes: readonly Note[],
+): Note[] {
   const { moment, level } = table;
-  const common = [...table.common];
+  const common = [...notes];
   const facts = tableFacts(view, table);
   const focusIdentities = focusCards(reading);
   const means = focusIdentities.length > 0;
@@ -686,18 +706,26 @@ interface LastEvent {
  * Brings knowledge up to date after an event: settles common knowledge, rules out the
  * interpretations the table now contradicts, narrows each pending clue to what its remaining
  * interpretations allow, and works out which cards are finessed. Repeats until nothing changes.
+ *
+ * Once an interpretation is ruled out, common knowledge starts again from `clued` (what the clues
+ * alone say) and narrows only by the interpretations still pending.
  */
 function resolve(
   view: PlayerView,
   table: Table,
   readings: readonly PastReading[],
+  clued: readonly Note[],
   last: LastEvent,
 ): { table: Table; readings: readonly PastReading[] } {
   type State = { table: Table; readings: readonly PastReading[] };
   const deduce = (state: State): State => {
     const settled = { ...state.table, common: settle(view, state.table, state.readings) };
     const ruled = ruleOut(settled, state.readings, last);
-    return { table: { ...settled, ...narrow(settled, ruled) }, readings: ruled };
+    const from =
+      ruled === state.readings
+        ? settled
+        : { ...settled, common: settle(view, { ...settled, common: [...clued] }, ruled) };
+    return { table: { ...from, ...narrow(from, ruled) }, readings: ruled };
   };
   // Settling and narrowing only remove cards, so equal sizes mean nothing changed.
   const unchanged = (a: State, b: State) =>

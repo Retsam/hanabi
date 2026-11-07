@@ -418,6 +418,21 @@ describe("clues", () => {
     expect(conventions(move)).toContain("2-save");
   });
 
+  // The Visible Rule doesn't stop it, as Bob can't see his other g2; but the 2 doesn't need saving,
+  // so the clue gets no pass for touching both copies. (reviews/game-unneeded-2save-badtouch.json)
+  it("can't break Good Touch to 2 Save a 2 whose other copy is in sight", () => {
+    const game = deal({
+      hands: [
+        ["r3", "g3", "b3", "p3", "r4"],
+        ["b4", "g2", "p4", "r4", "g2"],
+        ["y3", "g5", "b4", "p4", "y5"],
+      ],
+    });
+    const two = judged(game, { type: "clue", target: BOB, clue: { kind: "rank", value: 2 } });
+    expect(two.category).toBe("violates");
+    expect(conventions(two)).toEqual(["2-save", "good-touch"]);
+  });
+
   // beginner/save-principle: the last b3 is on Bob's chop. Both saves break Good Touch, and blue
   // is better since one of the blue 4s is useful.
   it("that save a critical card from the next player's chop are mandated", () => {

@@ -468,6 +468,35 @@ describe("finesse chains (level 2)", () => {
     expect(top(single)).toMatchObject({ action: playOf(red) });
   });
 
+  it("leave no notes behind when the blind-play misplays", () => {
+    // A 3 to Cathy can only be a Double Finesse on Bob: his first two cards are a 1 and a 2.
+    const doubled = deal({
+      hands: [
+        ["y4", "g4", "b4", "p4", "y5"],
+        ["g4", "r4", "g3", "b3", "p3"],
+        ["g2", "b2", "r3", "p2", "y2"],
+      ],
+      clueTokens: 6,
+    }).clue(CATHY, 3);
+    const [first, second] = [doubled.cardAt(0, BOB), doubled.cardAt(1, BOB)];
+    const three = doubled.cardAt(2, CATHY);
+    const before = read(doubled, ALICE, 2);
+    expect(names(before.common[second]!)).toEqual(["r2", "y2", "g2", "b2", "p2"]);
+    expect(before.finessed).toEqual([first, second]);
+
+    // Bob's first card is the g4, not a 1: every reading is ruled out, so nothing they narrowed
+    // stays narrowed.
+    const struck = doubled.play(0);
+    expect(struck.state.strikes).toBe(1);
+    const after = read(struck, ALICE, 2);
+    expect(after.readings[0]!.interpretations.every(({ ruledOutOn }) => ruledOutOn !== null)).toBe(
+      true,
+    );
+    expect(after.finessed).toEqual([]);
+    expect(after.common[second]).toHaveLength(25);
+    expect(names(after.common[three]!)).toEqual(["r3", "y3", "g3", "b3", "p3"]);
+  });
+
   // level-2#the-prompt--finesse: Bob's clued red card is prompted as the r2, then his finesse
   // position blind-plays as the r3.
   const promptFinesse = deal({

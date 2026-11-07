@@ -35,7 +35,11 @@ interpretations allow. An interpretation is ruled out when:
 - its finessed player took their turn without blind-playing the card while it was playable (finesses
   are urgent).
 
-If every interpretation is ruled out, a teammate broke a convention: the cards keep what they had.
+When a move rules an interpretation out, nothing it narrowed stays narrowed: common knowledge is
+rebuilt from what the clues alone say (touches, Good Touch and cards revealed since), then narrowed
+by the interpretations still pending. A failed finesse's blind-play positions go back to being any
+card. If every interpretation is ruled out, a teammate broke a convention: the clued cards keep what
+the clues alone say.
 
 ## `chop`
 

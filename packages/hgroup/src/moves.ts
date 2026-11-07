@@ -316,6 +316,8 @@ interface ClueCase extends Given {
   /** The interpretation the clue is mainly an example of: a save if it can be one. */
   readonly primary: Interpretation;
   readonly saving: boolean;
+  /** Whether it saves a card the Save Principle protects, which outweighs Good Touch. */
+  readonly savesProtected: boolean;
   /** Newly touched cards that are trash, or a copy of a card touched before them. */
   readonly bad: readonly CardId[];
   /** Newly touched cards the clue gets played or saved. */
@@ -434,6 +436,7 @@ function describeClue(
     real,
     primary: real.find(isSave) ?? real[0]!,
     saving: real.some(isSave),
+    savesProtected: real.some(isSave) && isProtected(judge, focus),
     bad,
     gotten: newlyTouched.filter((id) => !bad.includes(id)),
     after,
@@ -485,19 +488,23 @@ function copiesOwnClued(judge: Judge, clue: ClueCase): Finding | undefined {
     `${cards} may be a copy of one of your own clued cards.`,
   );
   // A play clue that may duplicate a clued card is a Good Touch mistake (the site's Sarcastic
-  // Discard example), so it's a last resort. A save still goes ahead: the Save Principle wins.
-  return clue.saving
+  // Discard example), so it's a last resort. Saving a protected card still goes ahead: the Save
+  // Principle wins.
+  return clue.savesProtected
     ? { score: -5 * risky.length, reason: found }
     : { violates: -4 - risky.length, reason: found };
 }
 
-/** Good Touch: the clue touches no trash, unless it saves a card that must not be lost. */
+/**
+ * Good Touch: the clue touches no trash, unless it saves a card the Save Principle protects. A save
+ * of a card with another copy in sight (a 2 whose twin is in a hand) can wait, so it gets no waiver.
+ */
 function badTouch(judge: Judge, clue: ClueCase): Finding | undefined {
   const { bad } = clue;
   if (bad.length === 0 || !judge.uses("good-touch")) return undefined;
   const cards = bad.map((id) => `the ${name(judge.seen(id)!)}`).join(" and ");
   const text = `It also touches ${cards}, which is trash.`;
-  if (!clue.saving)
+  if (!clue.savesProtected)
     return { violates: -15 - 5 * bad.length, reason: reason("good-touch", bad, text) };
   // Saving a card that must not be lost outweighs Good Touch.
   return {
@@ -650,13 +657,23 @@ const nextSeat = (view: PlayerView): Seat => (view.seat + 1) % view.config.numPl
  * do first (see `isBusy`). Null if there is none.
  */
 function urgentSave(judge: Omit<Judge, "urgent">): CardId | null {
-  const { view, knowledge, facts, mine } = judge;
-  const { moment } = knowledge;
+  const { view, knowledge } = judge;
   if (!judge.uses("save-principle")) return null;
   const next = nextSeat(view);
   const id = chop(knowledge, next);
   if (id === null) return null;
-  const card = judge.seen(id)!;
+  return isProtected(judge, id) && !isBusy(judge, knowledge, next) ? id : null;
+}
+
+/**
+ * Whether the Save Principle protects the card `id` (as the viewer sees it): a 5, a critical card,
+ * or a 2 or playable card with no other copy in sight. Wherever it is: `urgentSave` adds the chop.
+ */
+function isProtected(judge: Omit<Judge, "urgent">, id: CardId): boolean {
+  const { view, knowledge, facts, mine } = judge;
+  const { moment } = knowledge;
+  const card = judge.seen(id);
+  if (card === null) return false;
   const visible = (other: Card) =>
     moment.hands.some((hand, seat) =>
       hand.some((cardId) => {
@@ -668,13 +685,13 @@ function urgentSave(judge: Omit<Judge, "urgent">): CardId | null {
         return seat === view.seat && known !== undefined && sameCard(known, other);
       }),
     );
-  const protectedCard =
+  return (
     !facts.isTrash(card, id) &&
     (card.rank === 5 ||
       facts.isCritical(card) ||
       (card.rank === 2 && !visible(card)) ||
-      (isPlayable(moment, card) && !visible(card)));
-  return protectedCard && !isBusy(judge, knowledge, next) ? id : null;
+      (isPlayable(moment, card) && !visible(card)))
+  );
 }
 
 /**

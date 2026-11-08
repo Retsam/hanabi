@@ -65,6 +65,11 @@ export interface Connection {
    * finesse position for a finesse.
    */
   readonly candidateIds: readonly CardId[];
+  /**
+   * For a prompt (level 2): `seat`'s finesse position when the clue was given. If the prompted card
+   * misplays, the giver probably meant a finesse on it (`wrong-prompt`).
+   */
+  readonly finesseId?: CardId;
 }
 
 /** One way a clue can be read: what its focus is, and what has to happen for it to be true. */
@@ -77,6 +82,8 @@ export interface Interpretation {
   readonly conventions: readonly ConventionId[];
   /** The turn whose event showed this interpretation is wrong, or null while it is still possible. */
   readonly ruledOutOn: number | null;
+  /** The turn a later event added this interpretation on (`wrong-prompt`), if not the clue's. */
+  readonly since?: number;
 }
 
 /** How the table reads a clue. */
@@ -231,6 +238,9 @@ export function advance(view: PlayerView, knowledge: Knowledge, event: GameEvent
   } else {
     common = table.common.with(event.cardId, [event.card]);
   }
+  if (event.type === "play" && !event.success) {
+    ({ readings, common } = afterStrike(view, table, readings, common, event, turn));
+  }
   const after = {
     ...table,
     moment: applyEvent(moment, event),
@@ -239,6 +249,75 @@ export function advance(view: PlayerView, knowledge: Knowledge, event: GameEvent
   };
   const next = resolve(view, after, readings, { turn, event, before: moment });
   return { ...next.table, readings: next.readings, turn: turn + 1 };
+}
+
+/**
+ * After a misplay, the clues that asked for the misplayed card (as their focus or a connecting card)
+ * stop meaning anything: their pending interpretations are ruled out and the cards they touched
+ * fall back to what the clues say outright (`after-a-strike`). The exception is a prompted card
+ * that misplays: the giver probably meant a finesse, so the prompt turns into a finesse on the
+ * finesse position the player had when the clue was given (`wrong-prompt`).
+ */
+function afterStrike(
+  view: PlayerView,
+  table: Table,
+  readings: readonly PastReading[],
+  common: Note[],
+  event: Extract<GameEvent, { type: "play" }>,
+  turn: number,
+): { readings: readonly PastReading[]; common: Note[] } {
+  const hand = table.moment.hands[event.seat]!;
+  const notes = [...common];
+  const out = (interpretation: Interpretation) =>
+    interpretation.ruledOutOn === null ? { ...interpretation, ruledOutOn: turn } : interpretation;
+  const after = readings.map((reading) => {
+    if (!applies("after-a-strike", table.level)) return reading;
+    const live = pending(reading);
+    const asked = live.some(
+      ({ connections }) =>
+        reading.focus === event.cardId ||
+        connections.some(({ candidateIds }) => candidateIds.includes(event.cardId)),
+    );
+    if (!asked) return reading;
+    const isWrongPrompt = (connection: Connection) =>
+      connection.kind === "prompt" &&
+      connection.seat === event.seat &&
+      connectingCards(table, connection)[0] === event.cardId &&
+      connection.finesseId !== undefined &&
+      hand.includes(connection.finesseId) &&
+      applies("wrong-prompt", table.level);
+    const meant = live.flatMap((interpretation): Interpretation[] => {
+      const connections = interpretation.connections.map((connection) =>
+        isWrongPrompt(connection)
+          ? {
+              kind: "finesse" as const,
+              seat: connection.seat,
+              card: connection.card,
+              candidateIds: [connection.finesseId!],
+            }
+          : connection,
+      );
+      if (connections.every((connection, i) => connection === interpretation.connections[i])) {
+        return [];
+      }
+      const conventions = uniqBy([...interpretation.conventions, "wrong-prompt" as const]);
+      return [{ ...interpretation, connections, conventions, ruledOutOn: null, since: turn }];
+    });
+    if (meant.length > 0) {
+      // The wrong prompt's other readings stay, unless they asked for the misplayed card too.
+      const involved = (interpretation: Interpretation) =>
+        interpretation.connections.some(({ candidateIds }) => candidateIds.includes(event.cardId));
+      const interpretations = reading.interpretations.map((interpretation) =>
+        involved(interpretation) ? out(interpretation) : interpretation,
+      );
+      return { ...reading, interpretations: [...interpretations, ...meant] };
+    }
+    for (const id of reading.touched) {
+      if (id !== event.cardId) notes[id] = cluePossibilities(view.config, table.moment.clues[id]!);
+    }
+    return { ...reading, interpretations: reading.interpretations.map(out) };
+  });
+  return { readings: after, common: notes };
 }
 
 /** Each card's clue possibilities at `moment`, shared between cards with no clues. */
@@ -497,6 +576,8 @@ function connectionsFor(
   const isNext = (other: Card) =>
     other.suit === card.suit ? other.rank === card.rank : facts.isNext(other);
   const result: { connection: Connection; conventions: ConventionId[] }[] = [];
+  const finesseAt = (seat: Seat) =>
+    finessePosition({ ...table, finessed: [...table.finessed, ...finessed] }, seat);
 
   for (const seat of seats) {
     const beforeReceiver = seats.indexOf(seat) < seats.indexOf(given.target);
@@ -514,11 +595,13 @@ function connectionsFor(
       if (!anyway && beforeReceiver && uses("prompts-before-finesses")) {
         conventions.push("prompts-before-finesses");
       }
+      const position = anyway || !uses("wrong-prompt") ? undefined : finesseAt(seat);
       const connection: Connection = {
         kind: anyway ? "delayed" : "prompt",
         seat,
         card,
         candidateIds: ids,
+        ...(position === undefined ? {} : { finesseId: position }),
       };
       result.push({ connection, conventions });
     } else if (
@@ -528,7 +611,7 @@ function connectionsFor(
       uses("finesse") &&
       finesseFits(read, chain, seat, card)
     ) {
-      const id = finessePosition({ ...table, finessed: [...table.finessed, ...finessed] }, seat);
+      const id = finesseAt(seat);
       if (id === undefined) continue;
       const conventions: ConventionId[] = ["finesse", "finesse-position"];
       if (afterReceiver) conventions.push("reverse-finesse");
@@ -642,7 +725,8 @@ function ruleOut(
         // The card played from somewhere it wasn't promised: someone else held it.
         if (playedElsewhere(last.event, connection)) return false;
         if (hasPlayed(table.moment, connection.card)) return true;
-        const acted = last.turn > reading.turn && last.event.seat === connection.seat;
+        const acted =
+          last.turn > (interpretation.since ?? reading.turn) && last.event.seat === connection.seat;
         // A later finesse in a chain waits for the cards before it.
         if (connection.kind === "finesse" && acted && isPlayable(last.before, connection.card)) {
           return false;

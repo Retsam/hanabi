@@ -303,12 +303,15 @@ describe("chains of connections", () => {
         seat: BOB,
         card: { suit: "yellow", rank: 3 },
         candidateIds: [doublePrompt.cardAt(1, BOB), doublePrompt.cardAt(2, BOB)],
+        // At level 2 a prompt remembers the finesse position, in case it is a Wrong Prompt.
+        finesseId: doublePrompt.cardAt(0, BOB),
       },
       {
         kind: "prompt",
         seat: BOB,
         card: { suit: "yellow", rank: 4 },
         candidateIds: [doublePrompt.cardAt(2, BOB)],
+        finesseId: doublePrompt.cardAt(0, BOB),
       },
     ]);
     // Bob's two unclued cards could also be a Double Finesse on any other 5 (`multi-finesse`).

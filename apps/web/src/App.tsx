@@ -7,7 +7,7 @@ import {
   score,
 } from "@hanabi/engine";
 import { type Level, MAX_LEVEL } from "@hanabi/hgroup";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { clearGame, loadGame, loadLevel, type SavedGame, saveGame, saveLevel } from "./saved.ts";
 import {
   type PlayerCount,
@@ -18,6 +18,8 @@ import {
 } from "./session.ts";
 import { type CardNote, type Notes, setNote } from "./notes.ts";
 import { Fireworks } from "./Fireworks.tsx";
+import { LookBack } from "./LookBack.tsx";
+import { pastView } from "./lookback.ts";
 import { Review } from "./Review.tsx";
 import { Table } from "./Table.tsx";
 
@@ -105,6 +107,8 @@ function Game({ options, record, onLeave, ...start }: GameStart & { onLeave: () 
   const [abandoning, setAbandoning] = useState(false);
   const [notes, setNotes] = useState<Notes>(start.notes ?? {});
   const [celebrating, setCelebrating] = useState(false);
+  /** How many moves into the game the table being looked back at is, or null for the live table. */
+  const [looking, setLooking] = useState<number | null>(null);
   const stopCelebrating = useCallback(() => setCelebrating(false), []);
   // The session saves after each move from its own callback, which needs the latest notes.
   const notesRef = useRef(notes);
@@ -119,7 +123,10 @@ function Game({ options, record, onLeave, ...start }: GameStart & { onLeave: () 
       (next) => {
         setSnapshot(next);
         if (next.view.status !== "over") live = true;
-        else if (live && score(next.view) === maxScore(next.view.config)) setCelebrating(true);
+        else {
+          setLooking(null);
+          if (live && score(next.view) === maxScore(next.view.config)) setCelebrating(true);
+        }
         saveGame({ options, record: next.record, notes: notesRef.current });
       },
       record,
@@ -134,6 +141,7 @@ function Game({ options, record, onLeave, ...start }: GameStart & { onLeave: () 
     if (snapshot !== null) saveGame({ options, record: snapshot.record, abandoned: true, notes });
     setAbandoned(true);
     setAbandoning(false);
+    setLooking(null);
   };
 
   /** Ends this game for good: it is no longer saved, so a reload starts at the setup screen. */
@@ -142,6 +150,15 @@ function Game({ options, record, onLeave, ...start }: GameStart & { onLeave: () 
     clearGame();
     onLeave();
   };
+
+  const current = snapshot?.record;
+  const past = useMemo(
+    () =>
+      looking === null || current === undefined
+        ? null
+        : pastView(current, options.humanSeat, looking),
+    [current, options.humanSeat, looking],
+  );
 
   if (snapshot === null) return null;
   const { view, record: replay } = snapshot;
@@ -188,8 +205,20 @@ function Game({ options, record, onLeave, ...start }: GameStart & { onLeave: () 
           </span>
         </div>
       )}
+      {!over && (
+        <LookBack
+          view={view}
+          level={options.level}
+          you={options.humanSeat}
+          looking={looking}
+          onLook={setLooking}
+        />
+      )}
       {over && reviewing ? (
         <Review replay={replay} level={options.level} you={options.humanSeat} />
+      ) : past !== null ? (
+        // Read-only, and without notes: they hold what the player knows now, not what they knew then.
+        <Table view={past} level={options.level} />
       ) : (
         <Table
           view={view}

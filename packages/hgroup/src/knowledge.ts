@@ -251,7 +251,13 @@ export function advance(view: PlayerView, knowledge: Knowledge, event: GameEvent
     clued = knowledge.clued.with(event.cardId, [event.card]);
   }
   if (event.type === "play" && !event.success) {
-    ({ readings, common } = afterStrike(view, table, readings, common, event, turn));
+    let reset: CardId[];
+    ({ readings, reset } = afterStrike(view, table, readings, event, turn));
+    for (const id of reset) {
+      const notes = cluePossibilities(view.config, table.moment.clues[id]!);
+      common[id] = notes;
+      clued[id] = notes;
+    }
   }
   const after = {
     ...table,
@@ -274,12 +280,11 @@ function afterStrike(
   view: PlayerView,
   table: Table,
   readings: readonly PastReading[],
-  common: Note[],
   event: Extract<GameEvent, { type: "play" }>,
   turn: number,
-): { readings: readonly PastReading[]; common: Note[] } {
+): { readings: readonly PastReading[]; reset: CardId[] } {
   const hand = table.moment.hands[event.seat]!;
-  const notes = [...common];
+  const reset: CardId[] = [];
   const out = (interpretation: Interpretation) =>
     interpretation.ruledOutOn === null ? { ...interpretation, ruledOutOn: turn } : interpretation;
   const after = readings.map((reading) => {
@@ -325,11 +330,11 @@ function afterStrike(
       return { ...reading, interpretations: [...interpretations, ...meant] };
     }
     for (const id of reading.touched) {
-      if (id !== event.cardId) notes[id] = cluePossibilities(view.config, table.moment.clues[id]!);
+      if (id !== event.cardId) reset.push(id);
     }
     return { ...reading, interpretations: reading.interpretations.map(out) };
   });
-  return { readings: after, common: notes };
+  return { readings: after, reset };
 }
 
 /** Each card's clue possibilities at `moment`, shared between cards with no clues. */
@@ -718,21 +723,27 @@ function resolve(
   last: LastEvent,
 ): { table: Table; readings: readonly PastReading[] } {
   type State = { table: Table; readings: readonly PastReading[] };
+  const rebuilt = (from: Table, ruled: readonly PastReading[]): Table => {
+    const settled = { ...from, common: settle(view, { ...from, common: [...clued] }, ruled) };
+    return { ...settled, ...narrow(settled, ruled) };
+  };
   const deduce = (state: State): State => {
     const settled = { ...state.table, common: settle(view, state.table, state.readings) };
     const ruled = ruleOut(settled, state.readings, last);
-    const from =
-      ruled === state.readings
-        ? settled
-        : { ...settled, common: settle(view, { ...settled, common: [...clued] }, ruled) };
-    return { table: { ...from, ...narrow(from, ruled) }, readings: ruled };
+    if (ruled !== state.readings) return { table: rebuilt(settled, ruled), readings: ruled };
+    return { table: { ...settled, ...narrow(settled, ruled) }, readings: ruled };
   };
+  // The event itself may have ruled interpretations out already (`after-a-strike`).
+  const ruledNow = readings.some((reading) =>
+    reading.interpretations.some(({ ruledOutOn }) => ruledOutOn === last.turn),
+  );
+  const start = ruledNow ? rebuilt(table, readings) : table;
   // Settling and narrowing only remove cards, so equal sizes mean nothing changed.
   const unchanged = (a: State, b: State) =>
     a.readings === b.readings &&
     a.table.finessed.length === b.table.finessed.length &&
     sameSizes(a.table.common, b.table.common);
-  return fixpoint({ table, readings }, deduce, unchanged);
+  return fixpoint({ table: start, readings }, deduce, unchanged);
 }
 
 /**

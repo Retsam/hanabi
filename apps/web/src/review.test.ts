@@ -2,7 +2,13 @@ import { hgroupSeat, runGame } from "@hanabi/ai";
 import { createGame, shuffledDeck, standardConfig } from "@hanabi/engine";
 import { xoroshiro128plus } from "pure-rand/generator/xoroshiro128plus";
 import { describe, expect, it } from "vitest";
-import { type Category, MAX_LEVEL, type RankedMove, type TurnReview } from "@hanabi/hgroup";
+import {
+  type Category,
+  CONVENTION_LEVELS,
+  MAX_LEVEL,
+  type RankedMove,
+  type TurnReview,
+} from "@hanabi/hgroup";
 import { reviewTurns, standing } from "./review.ts";
 
 async function selfPlay(level: number, numPlayers: 2 | 3 | 4 | 5 = 3, seed = 4) {
@@ -45,9 +51,13 @@ describe("reviewTurns", { timeout: 20_000 }, () => {
     expect(previews.length).toBeGreaterThan(0);
     for (const { review, preview } of previews) {
       expect(preview.level).toBe(2);
-      // Self-play took level 1's top move, so level 2's differing pick ranks below it there.
+      // Self-play took level 1's top move, so level 2's differing pick ranks below it there, or ties
+      // with it and wins at level 2 for a level 2 reason.
       expect(preview.move.action).not.toEqual(review.move.action);
-      expect(preview.rank).toBeGreaterThan(1);
+      const levels = preview.move.reasons.map(({ convention }) =>
+        convention === null ? 0 : CONVENTION_LEVELS[convention],
+      );
+      expect(preview.rank > 1 || levels.includes(2)).toBe(true);
     }
     const conventions = previews.flatMap(({ preview }) =>
       preview.move.reasons.map((reason) => reason.convention),

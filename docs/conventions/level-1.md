@@ -283,3 +283,8 @@ category, then score, then a fixed order: plays, discards, then clues by seat an
   an off-chop r2, so her 2-saved card was a playable y2, g2 or p2.
 - **Ranking:** a 2 Save on a 2 whose other copy is visible in another hand violates the conventions:
   the receiver sees that copy, so they would misread the clue.
+
+## `after-a-strike`
+
+The site describes it on its level 2 page but says it applies at all levels, so it is read from level
+1 on. Spec: [level-2.md](./level-2.md#after-a-strike).

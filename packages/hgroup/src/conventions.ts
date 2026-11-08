@@ -27,13 +27,14 @@ export const CONVENTION_LEVELS = {
   "save-principle": 1,
   "minimum-clue-value": 1,
   "early-game": 1,
+  // The site describes it on its level 2 page but says it applies at all levels.
+  "after-a-strike": 1,
   "5-stall": 2,
   "multi-prompt": 2,
   "multi-finesse": 2,
   "prompt-plus-finesse": 2,
   "reverse-finesse": 2,
   "self-finesse": 2,
-  "after-a-strike": 2,
   "wrong-prompt": 2,
 } as const satisfies Record<string, Level>;
 

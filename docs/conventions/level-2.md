@@ -3,7 +3,7 @@
 Specs for the level 2 conventions `@hanabi/hgroup` implements so far, by their ids in
 [H-GROUP-LEVELS.md](../H-GROUP-LEVELS.md), in the same shape as [level-1.md](./level-1.md). The site's
 content is CC BY-SA 4.0. The tests are in `packages/hgroup/src/stall.test.ts` (`5-stall`) and
-`packages/hgroup/src/connections.test.ts` (prompts and finesses, including reverse and self-finesses).
+`packages/hgroup/src/connections.test.ts` (prompts and finesses, including reverse and self-finesses) and `packages/hgroup/src/strikes.test.ts` (`after-a-strike`, `wrong-prompt`).
 
 ## `5-stall`
 
@@ -122,6 +122,30 @@ content is CC BY-SA 4.0. The tests are in `packages/hgroup/src/stall.test.ts` (`
   would only reach after another player's turn (Bob holding a 2 on his finesse position too) is
   flagged as a misread, which is conservative. Common knowledge keeps Self-Finesse readings, so
   tests that list a clue's interpretations now also see them.
+
+## `after-a-strike`
+
+- **Source:** [level 2](https://hanabi.github.io/level-2#what-to-do-after-a-strike).
+- **Reading:** when a card misplays, every clue that asked for it, as its focus or as a connecting
+  card in one of its pending interpretations, stops meaning anything. Its interpretations are ruled
+  out, and the cards it touched fall back to what the clues on them say outright. So in the site's
+  example Cathy doesn't play her red card or guess what it is once Bob misplays.
+- **Judgment calls:** the site says this applies at all levels, but H-GROUP-LEVELS.md files it under
+  level 2, so it is read from level 2 on. At level 1 the misplay only rules out the interpretations it
+  contradicts, as before. Clues that didn't ask for the misplayed card are unaffected. Falling back
+  to what the clues say outright also drops narrowing from other clues on the same cards; Good Touch
+  on trash still holds.
+
+## `wrong-prompt`
+
+- **Source:** [level 2](https://hanabi.github.io/level-2#the-wrong-prompt).
+- **Reading:** a prompt remembers the prompted player's finesse position when the clue was given. If
+  the prompted card misplays, the giver probably meant a finesse there: the prompt becomes a finesse
+  on that card, and the player blind-plays it on their next turn (`after-a-strike` doesn't wipe the
+  clue). The clue's other interpretations that didn't ask for the misplayed card stay open: in the
+  site's example Cathy, who can't see Bob's r2, still can't tell the r2 from the r3 until he plays it.
+- **Judgment call:** it applies only while that finesse position is still in the player's hand.
+  The finesse it turns into is urgent from the player's next turn, not the turn of the misplay.
 
 ## Owed plays
 

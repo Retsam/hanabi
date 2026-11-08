@@ -33,6 +33,8 @@ export const CONVENTION_LEVELS = {
   "prompt-plus-finesse": 2,
   "reverse-finesse": 2,
   "self-finesse": 2,
+  "after-a-strike": 2,
+  "wrong-prompt": 2,
 } as const satisfies Record<string, Level>;
 
 export type ConventionId = keyof typeof CONVENTION_LEVELS;

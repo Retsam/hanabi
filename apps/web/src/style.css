@@ -653,3 +653,34 @@ button.card {
   font-size: 1.1rem;
   text-shadow: 0 1px 3px black;
 }
+
+.lookback {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+}
+
+.lookback.looking {
+  border-color: var(--accent);
+  background: var(--panel);
+}
+
+.lookback-where {
+  flex: 1;
+  color: var(--muted);
+}
+
+.lookback.looking .lookback-where {
+  color: var(--text);
+}
+
+.lookback .primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}

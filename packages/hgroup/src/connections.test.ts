@@ -468,12 +468,13 @@ describe("finesse chains (level 2)", () => {
   });
 
   it("leave no notes behind when the blind-play misplays", () => {
-    // A 3 to Cathy can only be a Double Finesse on Bob: his first two cards are a 1 and a 2.
+    // Cathy's other cards are known 5s, so a 3 to her can only be a Double Finesse on Bob: his
+    // first two cards are a 1 and a 2.
     const doubled = deal({
       hands: [
-        ["y4", "g4", "b4", "p4", "y5"],
+        ["y4", "g4", "b4", "p4", "r5"],
         ["g4", "r4", "g3", "b3", "p3"],
-        ["g2", "b2", "r3", "p2", "y2"],
+        ["y*5*", "b*5*", "r3", "p*5*", "g*5*"],
       ],
       clueTokens: 6,
     }).clue(CATHY, 3);
@@ -492,7 +493,8 @@ describe("finesse chains (level 2)", () => {
       true,
     );
     expect(after.finessed).toEqual([]);
-    expect(after.common[second]).toHaveLength(25);
+    // Anything but the four 5s Cathy holds.
+    expect(after.common[second]).toHaveLength(21);
     expect(names(after.common[three]!)).toEqual(["r3", "y3", "g3", "b3", "p3"]);
   });
 

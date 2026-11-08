@@ -43,9 +43,9 @@ describe("after a strike", () => {
     expect(top(misplayed).action).not.toEqual(playOf(cathysRed));
   });
 
-  it("are read the old way at level 1", () => {
-    // At level 1 the finesse is ruled out and Cathy is left with the direct play clue on the r2.
-    expect(knows(misplayed, CATHY, cathysRed, 1)).toEqual(["r2"]);
+  it("apply at level 1 too", () => {
+    expect(knows(misplayed, CATHY, cathysRed, 1)).toEqual(["r2", "r3", "r4", "r5"]);
+    expect(top(misplayed, 1).action).not.toEqual(playOf(cathysRed));
   });
 });
 

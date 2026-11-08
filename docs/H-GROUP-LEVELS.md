@@ -80,7 +80,7 @@ Level 1 is everything in the beginner's guide; the level 1 page restates it with
 Implemented so far: `chop`, `trash`, `clue-focus`, `good-touch`, `play-clue`, `delayed-play-clue`,
 `save-clue`, `5-save`, `2-save`, `critical-save`, `prompt`, `finesse`, `finesse-position`,
 `finessed-cards-count-as-clued` and `prompts-before-finesses` (reading clues), and `save-principle`,
-`minimum-clue-value` and `early-game` (ranking moves). From level 2: `5-stall`, `multi-prompt`, `multi-finesse`, `prompt-plus-finesse`, `reverse-finesse`, `self-finesse`, `after-a-strike` and `wrong-prompt`. Specs:
+`minimum-clue-value` and `early-game` (ranking moves), and `after-a-strike` (from level 2's page, but it applies at every level). From level 2: `5-stall`, `multi-prompt`, `multi-finesse`, `prompt-plus-finesse`, `reverse-finesse`, `self-finesse` and `wrong-prompt`. Specs:
 [conventions/level-1.md](./conventions/level-1.md), [conventions/level-2.md](./conventions/level-2.md).
 
 | ID                              | Convention                                                                                     | Kind        | Summary                                                                                                                                                      |
@@ -119,7 +119,7 @@ Source: [level 2](https://hanabi.github.io/level-2).
 | `self-finesse`           | [The Self-Finesse](https://hanabi.github.io/level-2#the-self-finesse)                                             | `clue`      | A finesse on the clue receiver's own finesse position, recognised when nobody else blind-plays.                                          |
 | `one-away-from-playable` | [One-Away-From-Playable Cards](https://hanabi.github.io/level-2#one-away-from-playable-cards)                     | `term`      | A card that would become playable after one more card is play-clued. Such cards can't be play-clued directly without a finesse.          |
 | `stomping`               | [Stomping on a Finesse](https://hanabi.github.io/level-2#stomping-on-a-finesse)                                   | `mistake`   | Directly cluing a card that was already going to blind-play wastes the clue.                                                             |
-| `after-a-strike`         | [What to Do After a Strike](https://hanabi.github.io/level-2#what-to-do-after-a-strike)                           | `principle` | After a misplay, make no further assumptions from the clue that caused it; two strikes in a row are very bad.                            |
+| `after-a-strike`         | [What to Do After a Strike](https://hanabi.github.io/level-2#what-to-do-after-a-strike)                           | `principle` | After a misplay, make no further assumptions from the clue that caused it; two strikes in a row are very bad. Applies at all levels.     |
 | `wrong-prompt`           | [The Wrong Prompt](https://hanabi.github.io/level-2#the-wrong-prompt)                                             | `mistake`   | If a prompted card misplays, the cluer probably meant a finesse; the prompted player should blind-play next.                             |
 
 ## Level 3: Basic Strategy

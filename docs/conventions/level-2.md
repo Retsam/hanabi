@@ -130,9 +130,10 @@ content is CC BY-SA 4.0. The tests are in `packages/hgroup/src/stall.test.ts` (`
   card in one of its pending interpretations, stops meaning anything. Its interpretations are ruled
   out, and the cards it touched fall back to what the clues on them say outright. So in the site's
   example Cathy doesn't play her red card or guess what it is once Bob misplays.
-- **Judgment calls:** the site says this applies at all levels, but H-GROUP-LEVELS.md files it under
-  level 2, so it is read from level 2 on. At level 1 the misplay only rules out the interpretations it
-  contradicts, as before. Clues that didn't ask for the misplayed card are unaffected. Falling back
+- **Level:** the site describes it on its level 2 page but says it applies at all levels, so it is
+  read from level 1 on (`CONVENTION_LEVELS` has it at 1). The spec stays here, next to
+  `wrong-prompt`.
+- **Judgment calls:** clues that didn't ask for the misplayed card are unaffected. Falling back
   to what the clues say outright also drops narrowing from other clues on the same cards; Good Touch
   on trash still holds.
 

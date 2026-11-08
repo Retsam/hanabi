@@ -148,6 +148,32 @@ content is CC BY-SA 4.0. The tests are in `packages/hgroup/src/stall.test.ts` (`
 - **Judgment call:** it applies only while that finesse position is still in the player's hand.
   The finesse it turns into is urgent from the player's next turn, not the turn of the misplay.
 
+## `stomping`
+
+- **Source:** [level 2](https://hanabi.github.io/level-2#stomping-on-a-finesse).
+- **Ranking:** a clue that touches a card some reading the clue giver can't rule out is already
+  getting blind-played by a finesse (and that the giver can see is the card the finesse asks for)
+  is a violation: it wastes a clue the finesse would have made unneeded.
+- **Judgment calls:** only finesses count. Cluing a card a prompt is about to play is already a Good
+  Touch question (it is touched), and a delayed play needs no blind play. A finesse whose card has
+  since been played no longer counts.
+
+## `one-away-from-playable`
+
+- **Source:** [level 2](https://hanabi.github.io/level-2#one-away-from-playable-cards).
+- **Meaning:** an unclued card is one-away-from-playable when exactly one card short of its stack
+  isn't played, clued or finessed (a visible clued card already counts toward the gap, as the r2 in
+  the site's example does).
+- **Ranking:** the site says players keep these cards as long as they can, but they can't be clued.
+  Nobody chooses to discard one when they have a choice, so this is a tiebreak between clues, worth
+  a little score (2), never a reason to outrank a mandated move or to give a clue that has nothing
+  else going for it. A clue gets it when a one-away card is on some player's chop and either the
+  clue gets the one missing card played (focus or connection), or the clue gives the next player,
+  whose chop it is, something to do this turn.
+- **Judgment calls:** the first one-away chop found (in turn order from the giver) is the one
+  credited. Trash and cards the giver can't see are skipped. Level 6's "value of one-away cards"
+  (chop moves on them) is separate.
+
 ## Owed plays
 
 A prompt or finesse is owed (mandated in move ranking) when every interpretation the player can't

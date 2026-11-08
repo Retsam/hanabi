@@ -28,6 +28,7 @@ import {
   pending,
   privateKnowledge,
   readGame,
+  stackHeight,
   seenFitting,
   tableFacts,
   type TableFacts,
@@ -341,11 +342,13 @@ type Finding =
  * decides the clue; the other findings add up.
  */
 const CLUE_CHECKS: readonly ((judge: Judge, clue: ClueCase) => Finding | undefined)[] = [
+  stomping,
   minimumClueValue,
   copiesOwnClued,
   badTouch,
   savePrinciple,
   playOverSave,
+  oneAwayKept,
 ];
 
 function judgeClue(judge: Judge, given: Given): RankedMove {
@@ -497,6 +500,36 @@ const CONNECTION_VALUE: Record<Connection["kind"], number> = {
   prompt: 10,
   delayed: 0,
 };
+
+/**
+ * Stomping on a Finesse: the clue touches a card the viewer sees is about to blind-play from a
+ * finesse, so the clue is wasted (`stomping`).
+ */
+function stomping(judge: Judge, clue: ClueCase): Finding | undefined {
+  if (!judge.uses("stomping")) return undefined;
+  const { knowledge, mine, view, seen } = judge;
+  const blindPlays = new Set(
+    knowledge.readings.flatMap((reading) =>
+      fitting(view, knowledge, reading, mine).flatMap(({ connections }) =>
+        connections.flatMap(({ kind, card, candidateIds }) => {
+          const id = candidateIds[0]!;
+          const visible = seen(id);
+          return kind === "finesse" &&
+            !hasPlayed(knowledge.moment, card) &&
+            visible !== null &&
+            sameCard(visible, card)
+            ? [id]
+            : [];
+        }),
+      ),
+    ),
+  );
+  const stomped = clue.touched.filter((id) => blindPlays.has(id));
+  if (stomped.length === 0) return undefined;
+  const cards = stomped.map((id) => `the ${name(seen(id)!)}`).join(" and ");
+  const text = `It touches ${cards}, which a finesse is already getting played: that stomps on the finesse.`;
+  return { violates: -3, reason: reason("stomping", stomped, text) };
+}
 
 /** Minimum Clue Value: every clue gets at least one new card played or saved. */
 function minimumClueValue(judge: Judge, clue: ClueCase): Finding | undefined {
@@ -790,6 +823,44 @@ function openAtNext(
       !interpretation.connections.some((connection) => connection.seat === judge.view.seat),
   );
   return reading.target === sight.seat ? asReceiver(reading, open) : open;
+}
+
+/**
+ * One-away-from-playable cards are worth keeping, though they can't be clued: a small tiebreak for a
+ * clue that keeps one from being discarded. Either it gives the next player, who has one on chop,
+ * something to do instead of discarding, or it gets the card that one needs played.
+ */
+function oneAwayKept(judge: Judge, clue: ClueCase): Finding | undefined {
+  if (!judge.uses("one-away-from-playable")) return undefined;
+  const { knowledge, seen, view } = judge;
+  const { moment } = knowledge;
+  // A visible clued card already counts toward its suit; the one card still missing must be the
+  // only gap (`one-away-from-playable`).
+  const clued = moment.hands
+    .flat()
+    .filter((id) => countsAsClued(knowledge, id))
+    .flatMap((id) => seen(id) ?? []);
+  const missingFor = (card: Card): Card[] =>
+    RANKS.filter((rank) => rank > stackHeight(moment, card.suit) && rank < card.rank)
+      .map((rank) => ({ suit: card.suit, rank }))
+      .filter((each) => !clued.some((other) => sameCard(other, each)));
+  const played = [clue.focusCard, ...clue.real[0]!.connections.map(({ card }) => card)];
+  for (const seat of seatsAfter(view.seat, view.config.numPlayers)) {
+    const id = chop(knowledge, seat);
+    const card = id === null ? null : seen(id);
+    if (id === null || card === null || judge.isTrash(card, id)) continue;
+    const missing = missingFor(card);
+    if (missing.length !== 1) continue;
+    const needed = missing[0]!;
+    const connects = played.some((each) => sameCard(each, needed));
+    const busy = seat === nextSeat(view) && isBusy(judge, clue.after, seat);
+    if (!connects && !busy) continue;
+    const text = connects
+      ? `It gets the ${name(needed)} played, so the ${name(card)} on chop becomes playable.`
+      : `The next player won't discard the ${name(card)} on chop, one away from playable.`;
+    return { score: 2, reason: reason("one-away-from-playable", [id], text) };
+  }
+  return undefined;
 }
 
 /**

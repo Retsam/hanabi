@@ -453,17 +453,43 @@ const STALL_SCORE = 4;
 const CHOP_AFTER_STALL_SCORE = 3;
 
 /**
- * What a clue is worth before the checks: each card it gets, each connection, a card to play now;
- * less if it spends the last clue token.
+ * What a clue is worth before the checks: each card it gets, by how much the receiver learns about
+ * it, and each card it gets played on the way; less if it spends the last clue token.
  */
 function clueValue(judge: Judge, clue: ClueCase): number {
   // A stall only gets 5's that are safe off chop anyway: worth less than any play or save clue.
   if (isStall(clue.primary)) return STALL_SCORE;
-  let score = 10 * clue.gotten.length + 5 * clue.real[0]!.connections.length;
-  if (isPlayable(judge.knowledge.moment, clue.focusCard) && !clue.saving) score += 10;
+  const known = seatKnows(judge, clue.after, clue.target);
+  let score = clue.gotten.reduce((sum, id) => sum + cardValue(judge, clue, id, known[id]!), 0);
+  score += clue.primary.connections.reduce((sum, { kind }) => sum + CONNECTION_VALUE[kind], 0);
   if (judge.view.clueTokens === 1) score -= 5;
   return score;
 }
+
+/**
+ * What a card the clue gets is worth, by what the receiver knows about it once the clue is given
+ * (`note`): most if they know it's playable now or know exactly what it is, less for the focus of a
+ * play clue they only know will play once its connections do, least for a card touched for later.
+ */
+function cardValue(judge: Judge, clue: ClueCase, id: CardId, note: Note): number {
+  const { moment } = judge.knowledge;
+  const definite =
+    note.length > 0 &&
+    (note.every((card) => isPlayable(moment, card)) || uniqBy(note, sameCard).length === 1);
+  if (definite) return 20;
+  if (id === clue.focus && !clue.saving) return 15;
+  return 10;
+}
+
+/**
+ * What each card a clue gets played on the way is worth: a finesse or a prompt gets a card played
+ * now (a prompt also tells its holder what the card is), while a delayed card would play anyway.
+ */
+const CONNECTION_VALUE: Record<Connection["kind"], number> = {
+  finesse: 10,
+  prompt: 10,
+  delayed: 0,
+};
 
 /** Minimum Clue Value: every clue gets at least one new card played or saved. */
 function minimumClueValue(judge: Judge, clue: ClueCase): Finding | undefined {

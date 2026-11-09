@@ -1,6 +1,6 @@
 // Scenario tests for move ranking at level 1. The Save Principle and Minimum Clue Value examples are
 // the H-Group beginner's guide's own. See docs/conventions/level-1.md.
-import { type Action, legalActions, playerView, type Seat } from "@hanabi/engine";
+import { type Action, type Clue, legalActions, playerView, type Seat } from "@hanabi/engine";
 import { deal, type Scenario } from "@hanabi/engine/testing";
 import { describe, expect, it } from "vitest";
 import { rankMoves } from "./moves.ts";
@@ -299,6 +299,28 @@ describe("clues", () => {
     });
     expect(move.category).toBe("permitted");
     expect(conventions(move)).toEqual(["finesse"]);
+  });
+
+  it("score a finesse above a direct play clue, and more when the receiver knows the focus", () => {
+    // Bob's p1 is on his finesse position. Blue gets Cathy's b1 played. Purple gets her p2 played
+    // after Bob's p1, though she can't tell it from the p1 until he plays. Number 2 does the same,
+    // and she knows it's the p2: every other 2 has been played or can't connect.
+    const game = deal({
+      hands: [
+        ["g4", "g2", "g3", "p5", "b5"],
+        ["p1", "r4", "p4", "b3", "g1"],
+        ["b1", "p2", "r1", "y1", "y4"],
+      ],
+      stacks: { red: 2, yellow: 3, green: 5 },
+    });
+    const clue = (clue: Clue) => judged(game, { type: "clue", target: CATHY, clue });
+    const blue = clue({ kind: "color", value: "blue" });
+    const purple = clue({ kind: "color", value: "purple" });
+    const two = clue({ kind: "rank", value: 2 });
+    for (const move of [blue, purple, two]) expect(move.category).toBe("permitted");
+    expect(conventions(purple)).toEqual(["finesse"]);
+    expect(purple.score).toBeGreaterThan(blue.score);
+    expect(two.score).toBeGreaterThan(purple.score);
   });
 
   it("violate the conventions when they would be misread", () => {

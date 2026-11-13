@@ -320,7 +320,10 @@ interface ClueCase extends Given {
   readonly saving: boolean;
   /** Whether it saves a card the Save Principle protects, which outweighs Good Touch. */
   readonly savesProtected: boolean;
-  /** Newly touched cards that are trash, or a copy of a card touched before them. */
+  /**
+   * Newly touched cards that are trash, a copy of a card touched before them, or a copy of a card the
+   * clue's connections play.
+   */
   readonly bad: readonly CardId[];
   /** Newly touched cards the clue gets played or saved. */
   readonly gotten: readonly CardId[];
@@ -424,11 +427,15 @@ function describeClue(
   real: readonly Interpretation[],
 ): ClueCase {
   const { knowledge, seen, isTrash } = judge;
+  const primary = real.find(isSave) ?? real[0]!;
   const newlyTouched = given.touched.filter((id) => !countsAsClued(knowledge, id));
   const bad = newlyTouched.filter((id, i) => {
     const card = seen(id)!;
     return (
-      isTrash(card, id) || newlyTouched.slice(0, i).some((other) => sameCard(seen(other)!, card))
+      isTrash(card, id) ||
+      newlyTouched.slice(0, i).some((other) => sameCard(seen(other)!, card)) ||
+      // The clue's own connections play this identity first, so the touched copy is trash by then.
+      primary.connections.some((connection) => sameCard(connection.card, card))
     );
   });
   return {
@@ -436,7 +443,7 @@ function describeClue(
     focus,
     focusCard: seen(focus)!,
     real,
-    primary: real.find(isSave) ?? real[0]!,
+    primary,
     saving: real.some(isSave),
     savesProtected: real.some(isSave) && isProtected(judge, focus),
     bad,

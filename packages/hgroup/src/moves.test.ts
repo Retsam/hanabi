@@ -393,6 +393,26 @@ describe("clues", () => {
     expect(conventions(move)).toContain("minimum-clue-value");
   });
 
+  it("violate Good Touch when they touch a copy of a card their own finesse plays", () => {
+    // Red to Cathy focuses her chop r3 through Bob's r2 on finesse, but also touches her r2: once
+    // Bob plays his, hers is trash.
+    const game = deal({
+      hands: [
+        ["y3", "g3", "b3", "p3", "y4"],
+        ["r2", "g4", "b4", "p4", "y4"],
+        ["g5", "r2", "b5", "p5", "r3"],
+      ],
+      stacks: { red: 1 },
+    });
+    const red = judged(game, {
+      type: "clue",
+      target: CATHY,
+      clue: { kind: "color", value: "red" },
+    });
+    expect(red.category).toBe("violates");
+    expect(conventions(red)).toEqual(["finesse", "good-touch"]);
+  });
+
   // level-3#the-sarcastic-discard calls such a clue a mistake: it might break Good Touch.
   it("are a last resort when the card they get may be a copy of the cluer's own clued card", () => {
     // Alice's clued 1 could be the y1 she would clue in Bob's hand.

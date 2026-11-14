@@ -8,6 +8,7 @@
   "ignorePatterns": ["node_modules", "dist", "coverage"],
   "rules": {
     "react/react-in-jsx-scope": "off",
+    "no-shadow": "off",
     "import/no-unassigned-import": ["warn", { "allow": ["**/*.css"] }],
     "typescript/no-unnecessary-condition": "error",
     "typescript/no-floating-promises": "error",

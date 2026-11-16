@@ -2,7 +2,6 @@
 // the replay record and the player's card notes are stored; the state is rebuilt by replaying the
 // record's actions.
 import { type Replay, replay } from "@hanabi/engine";
-import type { Level } from "@hanabi/hgroup";
 import type { Notes } from "./notes.ts";
 import type { SessionOptions } from "./session.ts";
 
@@ -50,22 +49,29 @@ export function clearGame(storage: GameStorage | null = browserStorage()): void 
 }
 
 /**
- * The level last picked on the setup screen. Unlike the game, it isn't scoped to the page's path:
- * a level is a preference, not something that must replay.
+ * Picks on the setup screen that carry over to the next game, by the localStorage key each is
+ * kept under. Unlike the game, they aren't scoped to the page's path: a pick is a preference, not
+ * something that must replay.
  */
-const LEVEL_KEY = "hanabi.level";
+const PREFERENCE_KEYS = { level: "hanabi.level", players: "hanabi.players" } as const;
+export type Preference = keyof typeof PREFERENCE_KEYS;
 
-/** The level last picked, if it is one of `levels`; otherwise null. */
-export function loadLevel(
-  levels: readonly Level[],
+/** The value last picked for `preference`, if it is one of `offered`; otherwise null. */
+export function loadPreference<T extends number>(
+  preference: Preference,
+  offered: readonly T[],
   storage: GameStorage | null = browserStorage(),
-): Level | null {
-  const level = Number(attempt(() => storage?.getItem(LEVEL_KEY)) ?? Number.NaN);
-  return levels.includes(level) ? level : null;
+): T | null {
+  const value = Number(attempt(() => storage?.getItem(PREFERENCE_KEYS[preference])) ?? Number.NaN);
+  return offered.find((option) => option === value) ?? null;
 }
 
-export function saveLevel(level: Level, storage: GameStorage | null = browserStorage()): void {
-  attempt(() => storage?.setItem(LEVEL_KEY, String(level)));
+export function savePreference(
+  preference: Preference,
+  value: number,
+  storage: GameStorage | null = browserStorage(),
+): void {
+  attempt(() => storage?.setItem(PREFERENCE_KEYS[preference], String(value)));
 }
 
 /** Whether a parsed save is from this version. Its record is checked by replaying it. */

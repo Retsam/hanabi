@@ -8,7 +8,14 @@ import {
 } from "@hanabi/engine";
 import { type Level, MAX_LEVEL } from "@hanabi/hgroup";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { clearGame, loadGame, loadLevel, type SavedGame, saveGame, saveLevel } from "./saved.ts";
+import {
+  clearGame,
+  loadGame,
+  loadPreference,
+  type SavedGame,
+  saveGame,
+  savePreference,
+} from "./saved.ts";
 import {
   type PlayerCount,
   type Session,
@@ -42,9 +49,11 @@ export function App() {
 }
 
 function Setup({ onStart }: { onStart: (options: SessionOptions) => void }) {
-  const [numPlayers, setNumPlayers] = useState<PlayerCount>(3);
+  const [numPlayers, setNumPlayers] = useState<PlayerCount>(
+    () => loadPreference("players", PLAYER_COUNTS) ?? 3,
+  );
   const [seed, setSeed] = useState(randomSeed);
-  const [level, setLevel] = useState<Level>(() => loadLevel(LEVELS) ?? 1);
+  const [level, setLevel] = useState<Level>(() => loadPreference("level", LEVELS) ?? 1);
   return (
     <form
       className="setup"
@@ -59,7 +68,11 @@ function Setup({ onStart }: { onStart: (options: SessionOptions) => void }) {
         Players{" "}
         <select
           value={numPlayers}
-          onChange={(event) => setNumPlayers(PLAYER_COUNTS[event.target.selectedIndex]!)}
+          onChange={(event) => {
+            const picked = PLAYER_COUNTS[event.target.selectedIndex]!;
+            setNumPlayers(picked);
+            savePreference("players", picked);
+          }}
         >
           {PLAYER_COUNTS.map((n) => (
             <option key={n}>{n}</option>
@@ -73,7 +86,7 @@ function Setup({ onStart }: { onStart: (options: SessionOptions) => void }) {
           onChange={(event) => {
             const picked = LEVELS[event.target.selectedIndex]!;
             setLevel(picked);
-            saveLevel(picked);
+            savePreference("level", picked);
           }}
         >
           {LEVELS.map((n) => (

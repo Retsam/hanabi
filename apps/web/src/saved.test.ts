@@ -5,10 +5,10 @@ import {
   clearGame,
   type GameStorage,
   loadGame,
-  loadLevel,
+  loadPreference,
   type SavedGame,
   saveGame,
-  saveLevel,
+  savePreference,
 } from "./saved.ts";
 
 const ALICE = 0;
@@ -89,24 +89,32 @@ describe("saved games", () => {
   });
 });
 
-describe("saved level", () => {
-  it("loads the level last picked", () => {
+describe("saved preferences", () => {
+  it("loads the value last picked", () => {
     const storage = memoryStorage();
-    expect(loadLevel([1, 2], storage)).toBeNull();
-    saveLevel(2, storage);
-    expect(loadLevel([1, 2], storage)).toBe(2);
+    expect(loadPreference("level", [1, 2], storage)).toBeNull();
+    savePreference("level", 2, storage);
+    expect(loadPreference("level", [1, 2], storage)).toBe(2);
   });
 
-  it("ignores a level that isn't offered", () => {
+  it("keeps each preference separately", () => {
     const storage = memoryStorage();
-    saveLevel(3, storage);
-    expect(loadLevel([1, 2], storage)).toBeNull();
+    savePreference("level", 2, storage);
+    savePreference("players", 4, storage);
+    expect(loadPreference("level", [1, 2], storage)).toBe(2);
+    expect(loadPreference("players", [2, 3, 4, 5], storage)).toBe(4);
+  });
+
+  it("ignores a value that isn't offered", () => {
+    const storage = memoryStorage();
+    savePreference("level", 3, storage);
+    expect(loadPreference("level", [1, 2], storage)).toBeNull();
     storage.setItem("hanabi.level", "x");
-    expect(loadLevel([1, 2], storage)).toBeNull();
+    expect(loadPreference("level", [1, 2], storage)).toBeNull();
   });
 
   it("does nothing without storage", () => {
-    expect(() => saveLevel(2, null)).not.toThrow();
-    expect(loadLevel([1, 2], null)).toBeNull();
+    expect(() => savePreference("players", 4, null)).not.toThrow();
+    expect(loadPreference("players", [2, 3, 4, 5], null)).toBeNull();
   });
 });

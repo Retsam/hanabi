@@ -808,8 +808,8 @@ function isBusy(judge: Omit<Judge, "urgent">, knowledge: Knowledge, seat: Seat):
 
 /**
  * A reading's interpretations that the next player (`sight`, who knows `known`) can't rule out when
- * they move. One that needs the viewer to play is ruled out by then, since the viewer doesn't play
- * it this turn. If they are the receiver, they only read a Self-Finesse when nothing else is open.
+ * they move. One that still needs the viewer to play is ruled out by then, since the viewer doesn't
+ * play it this turn; one whose connection the viewer already played stays open. If they are the receiver, they only read a Self-Finesse when nothing else is open.
  */
 function openAtNext(
   judge: Pick<Judge, "view">,
@@ -820,7 +820,10 @@ function openAtNext(
 ) {
   const open = seenFitting(sight, knowledge, reading, known).filter(
     (interpretation) =>
-      !interpretation.connections.some((connection) => connection.seat === judge.view.seat),
+      !interpretation.connections.some(
+        (connection) =>
+          connection.seat === judge.view.seat && !hasPlayed(knowledge.moment, connection.card),
+      ),
   );
   return reading.target === sight.seat ? asReceiver(reading, open) : open;
 }

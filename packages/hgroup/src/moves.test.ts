@@ -567,6 +567,37 @@ describe("clues", () => {
     expect(judged(game, { type: "clue", target: BOB, clue: five }).category).toBe("permitted");
   });
 
+  it("that save a card from chop are urgent when a clue on the next player waits on someone else", () => {
+    // Alice's 3 clue on Cathy's b3 reads g3, or a 3 through Bob's clued 1 and a prompt on Donald's
+    // clued 2. Bob has played his 1, a b1, but Donald's b2 hasn't played, so Cathy can't tell her
+    // card is playable and would discard the last y4. (reviews/game-4p-y4-save.json move 19)
+    const game = deal({
+      hands: [
+        ["g4", "p4", "r4", "y1"],
+        ["b1*", "y2", "g2", "p3"],
+        ["b3", "p1", "y4", "g1"],
+        ["b2*", "g4", "p2", "r1"],
+      ],
+      discardPile: ["y4"],
+      stacks: { green: 2 },
+      clueTokens: 5,
+    })
+      .clue(CATHY, 3)
+      .play(0)
+      .discard(3)
+      .discard(3)
+      .discard(3);
+    expect(game.state.currentPlayer).toBe(BOB);
+    for (const clue of [
+      { kind: "color", value: "yellow" },
+      { kind: "rank", value: 4 },
+    ] as const) {
+      const move = judged(game, { type: "clue", target: CATHY, clue });
+      expect(move.category).toBe("mandated");
+      expect(conventions(move)).toContain("save-principle");
+    }
+  });
+
   // beginner/other-general-strategy, "Give Play Clues Over Save Clues": a play clue keeps Bob busy,
   // so his y5 needn't be saved yet.
   it("that give the next player a card to play are preferred to saving their chop", () => {

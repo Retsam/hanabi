@@ -72,6 +72,12 @@ content is CC BY-SA 4.0. The tests are in `packages/hgroup/src/stall.test.ts` (`
   from the r4, and she waits.
 - **Judgment call:** a finesse followed by a prompt is level 2 here too. At level 1 a clue asks for one
   prompt or one finesse, beyond the cards that play anyway.
+- **Judgment call:** a finesse that waits for a card that plays anyway (a delayed play) is a Prompt +
+  Finesse too, since at level 1 a finessed card must be playable now. With Alice holding a clued g1,
+  a green clue on Cathy's g3 reads as Alice's g1 and then a finesse on Bob for the g2. A player who
+  sees Alice's g1 doesn't read a Double Finesse on Bob for the g1 and g2 (see
+  [`prompts-before-finesses`](./level-1.md#prompts-before-finesses)), so if Bob's finesse position is
+  the g1 the clue is misread.
 
 ## `reverse-finesse`
 

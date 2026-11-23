@@ -1,8 +1,8 @@
 // Scenario tests for prompts and finesses at level 1, mostly taken from the H-Group beginner's guide
 // examples. See docs/conventions/level-1.md.
-import { deal } from "@hanabi/engine/testing";
+import { deal, type Scenario } from "@hanabi/engine/testing";
 import { describe, expect, it } from "vitest";
-import { playerView } from "@hanabi/engine";
+import { type Clue, playerView } from "@hanabi/engine";
 import { finessePosition, privateKnowledge } from "./knowledge.ts";
 import { rankMoves } from "./moves.ts";
 import { common, lastReading, names, own, read } from "./testing/knowledge.ts";
@@ -550,6 +550,99 @@ describe("finesse chains (level 2)", () => {
     const finessed = waited.play(1);
     const after = privateKnowledge(playerView(finessed.state, CATHY), read(finessed, CATHY, 2));
     expect(names(after[cathysFour]!)).toEqual(["r4"]);
+  });
+});
+
+describe("clued cards before finesses (level 2)", () => {
+  // Bob holds a clued 1, the g1. Alice's green clue on Donald's g3 reads as Bob's g1 (it plays
+  // anyway) and then a finesse on Cathy for the g2. Nobody is finessed for the g1 while a clued
+  // copy is in sight.
+  const before = (cathy: string[]) =>
+    deal({
+      hands: [["y3", "b3", "p3", "y4"], ["b4", "p4", "g1*", "y5"], cathy, ["r4", "g3", "p4", "r5"]],
+    });
+  const rightBefore = before(["g2", "g1", "b2", "p2"]);
+  const wrongBefore = before(["g1", "g2", "b2", "p2"]);
+  const right = rightBefore.clue(DONALD, "green");
+  const wrong = wrongBefore.clue(DONALD, "green");
+  const bobsOne = right.cardAt(2, BOB);
+  const donaldsGreen = right.cardAt(1, DONALD);
+  /** How Alice judges cluing `clue` to Donald in `game`. */
+  const judgedClue = (
+    game: Scenario,
+    level: 1 | 2,
+    clue: Clue = { kind: "color", value: "green" },
+  ) =>
+    rankMoves(playerView(game.state, ALICE), level).find(
+      ({ action }) =>
+        action.type === "clue" && action.target === DONALD && action.clue.value === clue.value,
+    );
+
+  it("read a finesse that waits for a card that plays anyway as a Prompt + Finesse", () => {
+    const reading = read(right, ALICE, 2).readings[0]!;
+    const both = reading.interpretations.find(
+      ({ focusIdentity, connections }) =>
+        focusIdentity.rank === 3 && connections[1]?.seat === CATHY,
+    )!;
+    expect(both.conventions).toContain("prompt-plus-finesse");
+    expect(
+      both.connections.map(({ kind, seat, candidateIds }) => [kind, seat, candidateIds]),
+    ).toEqual([
+      ["delayed", BOB, [bobsOne]],
+      ["finesse", CATHY, [right.cardAt(0, CATHY)]],
+    ]);
+    // At level 1 a finessed card must be playable now.
+    expect(
+      read(right, ALICE, 1).readings[0]!.interpretations.some(
+        ({ focusIdentity }) => focusIdentity.rank === 3,
+      ),
+    ).toBe(false);
+  });
+
+  it("don't finesse a card a player sees clued elsewhere", () => {
+    // Donald sees Bob's g1, so he reads neither a finesse on Cathy for it nor a Double Finesse.
+    const donald = (game: ReturnType<typeof deal>) =>
+      names(privateKnowledge(playerView(game.state, DONALD), read(game, DONALD, 2))[donaldsGreen]!);
+    expect(donald(wrong)).toEqual(["g2"]);
+    expect(donald(right)).toEqual(["g2", "g3"]);
+    // The table can't see Bob's 1 is the g1, so the Double Finesse on Cathy stays in common
+    // knowledge.
+    expect(
+      read(wrong, ALICE, 2).readings[0]!.interpretations.some(
+        ({ connections }) =>
+          connections.length === 2 && connections.every(({ kind }) => kind === "finesse"),
+      ),
+    ).toBe(true);
+  });
+
+  it("make the clue permitted when the finesse position is the next card, and misread otherwise", () => {
+    expect(judgedClue(rightBefore, 2)).toMatchObject({
+      category: "permitted",
+      reasons: [{ convention: "prompt-plus-finesse" }],
+    });
+    expect(judgedClue(rightBefore, 1)).toMatchObject({ category: "violates" });
+    // Bob and Donald see Bob's g1, so they read a finesse on Cathy for the g2, not a Double Finesse.
+    expect(judgedClue(wrongBefore, 2)).toMatchObject({ category: "violates", score: -30 });
+  });
+
+  it("violate Good Touch when a finesse plays a copy of a card clued in the receiver's hand", () => {
+    // Donald's 1 is the g1, but he can't see it: he reads a Double Finesse on Bob and Cathy, which
+    // makes his 1 trash.
+    const game = deal({
+      hands: [
+        ["y3", "b3", "p3", "y4"],
+        ["g1", "p4", "b4", "y5"],
+        ["g2", "b2", "p2", "y2"],
+        ["r4", "g3", "p4", "g1*"],
+      ],
+    });
+    expect(judgedClue(game, 2, { kind: "rank", value: 3 })).toMatchObject({
+      category: "violates",
+      reasons: [
+        { convention: "multi-finesse" },
+        { convention: "good-touch", cards: [game.cardAt(3, DONALD)] },
+      ],
+    });
   });
 });
 

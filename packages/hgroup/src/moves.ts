@@ -15,6 +15,7 @@ import {
   asReceiver,
   chop,
   type ClueReading,
+  type PastReading,
   type Connection,
   connectingCards,
   countsAsClued,
@@ -346,6 +347,7 @@ const CLUE_CHECKS: readonly ((judge: Judge, clue: ClueCase) => Finding | undefin
   minimumClueValue,
   copiesOwnClued,
   badTouch,
+  finessesCopy,
   savePrinciple,
   playOverSave,
   oneAwayKept,
@@ -581,6 +583,32 @@ function badTouch(judge: Judge, clue: ClueCase): Finding | undefined {
   };
 }
 
+/**
+ * Good Touch for blind-plays: the clue's finesses don't play a card the viewer sees clued elsewhere,
+ * which the finesse would make trash. Players who see the clued copy read a delayed play or prompt
+ * through it instead (`finessesClued` in knowledge.ts), so this only catches a copy they can't see,
+ * such as one in the receiver's own hand.
+ */
+function finessesCopy(judge: Judge, clue: ClueCase): Finding | undefined {
+  if (!judge.uses("good-touch")) return undefined;
+  const { moment } = clue.after;
+  const finessed = clue.primary.connections.filter(({ kind }) => kind === "finesse");
+  const own = new Set(clue.primary.connections.flatMap(({ candidateIds }) => candidateIds));
+  const copies = moment.hands.flat().filter((id) => {
+    const card = judge.seen(id);
+    return (
+      card !== null &&
+      !own.has(id) &&
+      countsAsClued(clue.after, id) &&
+      finessed.some((connection) => sameCard(connection.card, card))
+    );
+  });
+  if (copies.length === 0) return undefined;
+  const cards = copies.map((id) => `the ${name(judge.seen(id)!)}`).join(" and ");
+  const text = `Its finesse blind-plays a copy of ${cards}, already clued, which becomes trash.`;
+  return { violates: -15 - 5 * copies.length, reason: reason("good-touch", copies, text) };
+}
+
 /** The Save Principle: a card about to be discarded from the next player's chop must be saved. */
 function savePrinciple(judge: Judge, clue: ClueCase): Finding | undefined {
   if (clue.target !== nextSeat(judge.view) || clue.focus !== judge.urgent) return undefined;
@@ -814,7 +842,7 @@ function isBusy(judge: Omit<Judge, "urgent">, knowledge: Knowledge, seat: Seat):
 function openAtNext(
   judge: Pick<Judge, "view">,
   knowledge: Knowledge,
-  reading: ClueReading,
+  reading: PastReading,
   sight: Sight,
   known: readonly Note[],
 ) {

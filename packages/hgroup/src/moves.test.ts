@@ -700,6 +700,36 @@ describe("finesse clues", () => {
   });
 });
 
+describe("clues waiting on a card Good Touch guessed wrong", () => {
+  // From a played game: Bob's 2 Save on Cathy's y2 copies his own yellow card, which turns out to be
+  // the y2 and plays. Good Touch then has the table read Cathy's 2 as the b2, but she knows it isn't:
+  // the other b2 is in Alice's hand and the last one is discarded.
+  const game = deal({
+    hands: [
+      ["b3", "b2", "r1", "g1", "p1"],
+      ["r3", "g4", "y*2", "b4", "p3"],
+      ["r4", "g3", "b5", "p4", "y2"],
+    ],
+    drawPile: ["y4", "y3", "g5", "r5", "y5"],
+    stacks: { red: 2, yellow: 1, green: 2, blue: 1, purple: 2 },
+    clueTokens: 6,
+  })
+    .discard(4)
+    .clue(CATHY, 2)
+    .discard(3)
+    .clue(BOB, 2)
+    .play(2);
+
+  it("are misread when the card they wait on isn't there", () => {
+    // Alice's 3 is the b3, read as a delayed play clue behind Cathy's "b2".
+    const three = judged(game, { type: "clue", target: ALICE, clue: { kind: "rank", value: 3 } });
+    expect(three.category).toBe("violates");
+    expect(three.reasons[0]!.text).toContain(
+      "the blue 2 it waits on isn't seat 2's clued card, as the table thinks",
+    );
+  });
+});
+
 describe("rankMoves", () => {
   it("returns nothing once the game is over", () => {
     const game = deal({

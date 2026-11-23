@@ -225,6 +225,10 @@ category, then score, then a fixed order: plays, discards, then clues by seat an
   viewer thinks they could be) needs their finesse position. The site doesn't spell this out, but a
   finesse the blind-player can't see fails. A clue that is also true without the blind-play, like a
   save that could be a finesse, is fine either way.
+- **Judgment call:** a play clue whose focus waits on a card the table thinks a clued card already
+  is counts as misread if the viewer knows that card isn't it. After a save that copied the giver's
+  own clued card, Good Touch can make the table read the saved card as something it isn't, and a
+  delayed play clue built on that guess never becomes playable.
 - **Scores:** a clue scores for each new card it gets, for a focus that is playable now and for each
   connecting card. Among violations, the score puts the least harmful first: a clue that gets nothing,
   then one that means nothing at the table's level, then discards and clues that lose or mislead about

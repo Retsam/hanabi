@@ -745,6 +745,45 @@ function wrongConnection(
       return { text: `the ${kind} would get seat ${seat} to play the ${name(card)}`, cards: [id] };
     }
   }
+  return wrongGotten(judge, after, interpretation);
+}
+
+/**
+ * For a play clue, the first card its focus waits on that the table thinks a clued card already is,
+ * when the viewer knows no such card is: Good Touch guessed wrong after a save broke it, say. The
+ * cards the connections supply are checked by `wrongConnection`.
+ */
+function wrongGotten(
+  judge: Judge,
+  after: Knowledge,
+  interpretation: Interpretation,
+): { text: string; cards: CardId[] } | undefined {
+  if (interpretation.kind !== "play") return undefined;
+  const { suit, rank } = interpretation.focusIdentity;
+  const { moment, common, badTouched } = after;
+  for (const below of RANKS) {
+    if (below <= stackHeight(moment, suit) || below >= rank) continue;
+    const card = { suit, rank: below };
+    if (interpretation.connections.some((connection) => sameCard(connection.card, card))) continue;
+    const holders = moment.hands
+      .flat()
+      .filter((id) => countsAsClued(after, id) && !badTouched.includes(id))
+      .filter((id) => {
+        const known = identity(common[id]!);
+        return known !== undefined && sameCard(known, card);
+      });
+    const viewerAgrees = (id: CardId) => {
+      const seen = judge.seen(id);
+      return seen === null ? couldBe(judge.mine[id]!, card) : sameCard(seen, card);
+    };
+    if (holders.length === 0 || holders.some(viewerAgrees)) continue;
+    const id = holders[0]!;
+    const seat = moment.hands.findIndex((hand) => hand.includes(id));
+    return {
+      text: `the ${name(card)} it waits on isn't seat ${seat}'s clued card, as the table thinks`,
+      cards: [id],
+    };
+  }
   return undefined;
 }
 

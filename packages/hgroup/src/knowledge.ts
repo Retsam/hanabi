@@ -536,14 +536,22 @@ function connectedPlay(
 const countOf = ({ connections }: Chain, kind: Connection["kind"]) =>
   connections.filter((connection) => connection.kind === kind).length;
 
-/** The level 2 conventions that let a clue ask for `chain`'s mix of prompts and finesses. */
+/**
+ * The level 2 conventions that let a clue ask for `chain`'s mix of prompts and finesses. A finesse
+ * that waits for a card that plays anyway (a delayed one) is a Prompt + Finesse too: at level 1 a
+ * finessed card must be playable now.
+ */
 function combined(chain: Chain): ConventionId[] {
   const prompts = countOf(chain, "prompt");
   const finesses = countOf(chain, "finesse");
+  const firstFinesse = chain.connections.findIndex(({ kind }) => kind === "finesse");
+  const delayedFirst =
+    firstFinesse > 0 &&
+    chain.connections.slice(0, firstFinesse).some(({ kind }) => kind === "delayed");
   const result: ConventionId[] = [];
   if (prompts > 1) result.push("multi-prompt");
   if (finesses > 1) result.push("multi-finesse");
-  if (prompts > 0 && finesses > 0) result.push("prompt-plus-finesse");
+  if ((prompts > 0 && finesses > 0) || delayedFirst) result.push("prompt-plus-finesse");
   return result;
 }
 
@@ -644,14 +652,18 @@ function connectionsFor(
 
 /**
  * Whether `seat` can be finessed for `card` once `chain` has supplied the cards before it: `card`
- * is playable now, or (level 2) the chain has a prompt or finesse that makes it playable, held by
- * seats that play no later than `seat`, so `seat` blind-plays once those cards have played.
+ * is playable now, or (level 2) the chain's cards make it playable, held by seats that play no later
+ * than `seat`, so `seat` blind-plays once those cards have played. A chain of cards that play anyway
+ * only makes a finesse fit as a Prompt + Finesse.
  */
 function finesseFits(read: ClueOnTable, chain: Chain, seat: Seat, card: Card): boolean {
   const { table, given, view, uses } = read;
   if (isPlayable(table.moment, card)) return true;
   if (!uses("multi-finesse") && !uses("prompt-plus-finesse")) return false;
-  if (chain.connections.every(({ kind }) => kind === "delayed")) return false;
+  if (chain.connections.length === 0) return false;
+  if (chain.connections.every(({ kind }) => kind === "delayed") && !uses("prompt-plus-finesse")) {
+    return false;
+  }
   const seats = seatsAfter(given.giver, view.config.numPlayers);
   return chain.connections.every(
     (connection) => seats.indexOf(connection.seat) <= seats.indexOf(seat),
@@ -1010,6 +1022,46 @@ function twoSaveSeen(view: Sight, reading: ClueReading, interpretation: Interpre
 }
 
 /**
+ * Whether the viewer can tell `interpretation` finesses a card that is already clued: they see (or
+ * know) a clued copy of it outside the giver's hand, clued no later than `reading`'s clue. Under
+ * Good Touch nobody is finessed for a card that is already clued: the clued copy plays instead (a
+ * delayed play or a prompt, which `connectionsFor` reads too), so only a player who can tell which
+ * card it is rules the finesse out. The giver can't see their own hand, so their clued cards don't
+ * count (see `mayCopy`).
+ */
+function finessesClued(
+  view: Sight,
+  table: Pick<Knowledge, "moment" | "readings">,
+  reading: PastReading,
+  interpretation: Interpretation,
+  known: readonly Note[],
+): boolean {
+  const { moment, readings } = table;
+  const finessed = interpretation.connections.filter(
+    ({ kind, card }) => kind === "finesse" && !hasPlayed(moment, card),
+  );
+  if (finessed.length === 0) return false;
+  const own = new Set(interpretation.connections.flatMap(({ candidateIds }) => candidateIds));
+  const touchedBy = (keep: (other: PastReading) => boolean) =>
+    new Set(readings.filter(keep).flatMap(({ touched }) => touched));
+  const before = touchedBy((other) => other.turn <= reading.turn);
+  const after = touchedBy((other) => other.turn > reading.turn);
+  const clued = moment.hands.flatMap((hand, seat) =>
+    seat === reading.giver
+      ? []
+      : hand.filter(
+          (id) => !own.has(id) && isClued(moment, id) && (before.has(id) || !after.has(id)),
+        ),
+  );
+  return finessed.some(({ card }) =>
+    clued.some((id) => {
+      const seen = view.cards[id]!.card ?? identity(known[id]!);
+      return seen !== undefined && sameCard(seen, card);
+    }),
+  );
+}
+
+/**
  * What `reading`'s receiver makes of `interpretations`: they only read a Self-Finesse (one that
  * finesses them) when nothing else is left (`self-finesse`).
  */
@@ -1033,8 +1085,8 @@ export function asReceiver(
  */
 export function fitting(
   view: Sight,
-  table: Pick<Table, "moment" | "common">,
-  reading: ClueReading,
+  table: Pick<Knowledge, "moment" | "common" | "readings">,
+  reading: PastReading,
   known: readonly Note[],
 ): Interpretation[] {
   const fits = seenFitting(view, table, reading, known);
@@ -1044,8 +1096,8 @@ export function fitting(
 /** `fitting` without the receiver's Self-Finesse fallback. */
 export function seenFitting(
   view: Sight,
-  table: Pick<Table, "moment" | "common">,
-  reading: ClueReading,
+  table: Pick<Knowledge, "moment" | "common" | "readings">,
+  reading: PastReading,
   known: readonly Note[],
 ): Interpretation[] {
   const could = (id: CardId, card: Card) => couldBe(known[id]!, card);
@@ -1053,6 +1105,7 @@ export function seenFitting(
     (interpretation) =>
       could(reading.focus, interpretation.focusIdentity) &&
       !twoSaveSeen(view, reading, interpretation) &&
+      !finessesClued(view, table, reading, interpretation, known) &&
       interpretation.connections.every(
         (connection) =>
           hasPlayed(table.moment, connection.card) ||

@@ -180,6 +180,13 @@ the clues alone say.
 - **Source:** [level 1](https://hanabi.github.io/level-1#prompts--finesses).
 - **Rule:** a player with a clued card that could be the missing card is prompted, never finessed, so
   their finesse position is not read as a finesse.
+- **Other players' clued cards:** nobody is finessed for a card that is already clued in another hand:
+  under Good Touch the clued copy plays instead, as a delayed play or a prompt. The table can't always
+  tell (Alice's clued 1 could be the g1 or the b1), so it keeps both readings, and a player who sees
+  (or knows) a clued copy outside the giver's hand, clued no later than the clue, rules the finesse
+  out. So Bob, seeing Alice's clued g1, doesn't blind-play for a g2 clue to Cathy.
+- **Ranking:** a clue whose finesse blind-plays a copy of a card the giver sees clued elsewhere (one
+  the receiver can't see, in their own hand, say) violates `good-touch`: the finesse makes it trash.
 
 ## `trash`
 

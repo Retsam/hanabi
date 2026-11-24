@@ -251,6 +251,46 @@ describe("finesses", () => {
   });
 });
 
+describe("clues at the maximum clue tokens", () => {
+  // Alice plays her p5, which gets the clue token back, then Bob clues Alice's r4. Cathy's finesse
+  // position is the r3, but at 8 clue tokens Bob couldn't discard, so the clue may be a stall.
+  const atTokens = (clueTokens: number) =>
+    deal({
+      hands: [
+        ["p5", "r4", "g4", "b4", "y4"],
+        ["g3", "b3", "y3", "p3", "g5"],
+        ["r3", "g4", "b4", "p4", "y4"],
+      ],
+      stacks: { red: 2, yellow: 2, green: 2, blue: 2, purple: 4 },
+      clueTokens,
+    });
+  const clued = (clueTokens: number) => atTokens(clueTokens).play(0).clue(ALICE, "red");
+
+  it("are not read as finesses after the first turn", () => {
+    const game = clued(7);
+    expect(lastReading(game, ALICE).play).toEqual(["r3"]);
+  });
+
+  it("are read as finesses below the maximum", () => {
+    const game = clued(6);
+    expect(lastReading(game, ALICE).play).toEqual(["r3", "r4"]);
+  });
+
+  it("are read as finesses on the first turn, when nobody has had a chance to discard", () => {
+    // The beginner's guide finesse examples start the game at 8 clue tokens.
+    const finesse = deal({
+      hands: [
+        ["y3", "g3", "b3", "p3", "y4"],
+        ["r3", "g4", "b4", "p4", "y4"],
+        ["g5", "b5", "r4", "p5", "y5"],
+      ],
+      stacks: { red: 2, yellow: 2, green: 2, blue: 2, purple: 2 },
+    }).clue(CATHY, "red");
+    expect(finesse.state.clueTokens).toBe(7);
+    expect(lastReading(finesse, ALICE).play).toEqual(["r3", "r4"]);
+  });
+});
+
 describe("chains of connections", () => {
   // beginner/delayed-play-clues: a play clue can wait on any number of cards that play anyway.
   // Here Bob's 2 plays anyway (every 2 is playable), so it costs nothing and his 3 can still be
@@ -622,7 +662,15 @@ describe("clued cards before finesses (level 2)", () => {
     });
     expect(judgedClue(rightBefore, 1)).toMatchObject({ category: "violates" });
     // Bob and Donald see Bob's g1, so they read a finesse on Cathy for the g2, not a Double Finesse.
-    expect(judgedClue(wrongBefore, 2)).toMatchObject({ category: "violates", score: -30 });
+    // Nothing misplays (Cathy's finesse position is the playable g1), but two cards get wrong notes.
+    expect(judgedClue(wrongBefore, 2)).toMatchObject({
+      category: "violates",
+      score: -32,
+      reasons: [
+        {},
+        { text: "It would leave the green 1 and the green 3 noted as something else." },
+      ],
+    });
   });
 
   it("violate Good Touch when a finesse plays a copy of a card clued in the receiver's hand", () => {
@@ -871,6 +919,7 @@ describe("self-finesses (level 2)", () => {
         {
           text: "Cluing number 3 to seat 2 would be read as the yellow 3, but the card is the red 3.",
         },
+        { text: "It would get the red 3 played, which won't play." },
       ],
     });
   });

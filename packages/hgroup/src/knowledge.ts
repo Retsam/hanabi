@@ -293,7 +293,7 @@ export function advance(view: PlayerView, knowledge: Knowledge, event: GameEvent
   let added: CardId[] = [];
   if (event.type === "clue") {
     const { seat: giver, target, clue, touched } = event;
-    const reading = readClue(view, table, { giver, target, clue, touched });
+    const reading = readClue(view, table, { giver, target, clue, touched }, turn);
     readings = [...readings, { ...reading, turn }];
     common = applyReading(view, table, reading, table.common);
     clued = applyReading(view, table, reading, knowledge.clued);
@@ -313,7 +313,7 @@ export function advance(view: PlayerView, knowledge: Knowledge, event: GameEvent
   }
   const after = {
     ...table,
-    moment: applyEvent(moment, event),
+    moment: applyEvent(view.config, moment, event),
     common,
     tentative: [...tentative, ...added],
     earlyGame: earlyGame && event.type !== "discard",
@@ -401,13 +401,18 @@ function startingNotes(view: PlayerView, moment: Moment): Note[] {
 }
 
 /**
- * Reads a clue on `table`, the moment before it is given. Used both for clues in the log and to
- * predict how a clue the viewer is considering would be read.
+ * Reads a clue on `table`, the moment before it is given on `turn`. Used both for clues in the log
+ * and to predict how a clue the viewer is considering would be read.
  *
  * The reading is common knowledge: it lists every interpretation the table can't rule out from
  * public information. A player narrows it further with the cards they see (`privateKnowledge`).
  */
-export function readClue(view: PlayerView, table: Table, given: GivenClue): ClueReading {
+export function readClue(
+  view: PlayerView,
+  table: Table,
+  given: GivenClue,
+  turn: number,
+): ClueReading {
   const uses = (convention: ConventionId) => applies(convention, table.level);
   const focus = clueFocus(table, given);
   const giverClued = table.moment.hands[given.giver]!.filter((id) => countsAsClued(table, id));
@@ -437,7 +442,10 @@ export function readClue(view: PlayerView, table: Table, given: GivenClue): Clue
   };
   const onChop = focus === chop(table, given.target);
   const ordinary = interpretationsOf(read, onChop);
-  const interpretations = [...ordinary, ...badTouchReadings(read, onChop, ordinary)];
+  const stalled = isStallingClue(view, table, turn);
+  const interpretations = [...ordinary, ...badTouchReadings(read, onChop, ordinary)].filter(
+    (interpretation) => !stalled || !interpretation.connections.some(isFinesse),
+  );
   if (interpretations.length === 0) return offConvention;
 
   const conventions = uniqBy<ConventionId>([
@@ -448,6 +456,17 @@ export function readClue(view: PlayerView, table: Table, given: GivenClue): Clue
   if (othersTouched && uses("good-touch")) conventions.push("good-touch");
   return { ...given, giverClued, giverSawOffChop, focus, interpretations, conventions };
 }
+
+/**
+ * Whether a clue on `turn` is given at the maximum clue tokens, past the game's first move: the giver
+ * couldn't discard, so may have had nothing worth cluing. Such a clue is never read as a finesse
+ * (see `finesse` in docs/conventions/level-1.md).
+ */
+function isStallingClue(view: PlayerView, table: Table, turn: number): boolean {
+  return turn > 0 && table.moment.clueTokens >= view.config.maxClueTokens;
+}
+
+const isFinesse = (connection: Connection) => connection.kind === "finesse";
 
 /** Every way a clue could be read on `read`'s table, saves first. */
 function interpretationsOf(read: ClueOnTable, onChop: boolean): Interpretation[] {

@@ -659,6 +659,35 @@ describe("clues", () => {
 const blindPlay = (move: { reasons: readonly { text: string }[] }) =>
   move.reasons.some((reason) => reason.text.includes("must blind-play"));
 
+describe("misread clues", () => {
+  // From self-play: at 8 clue tokens every clue Alice can give is misread. Bob's y3 isn't playable.
+  // Yellow reads as the y2, so Bob would misplay it. Number 3 reads as the r3, after Alice's clued
+  // r2: Bob notes it wrong, but waits.
+  const game = deal({
+    hands: [
+      ["g4", "b4", "p4", "r*2*", "y4"],
+      ["b2", "y3", "g5", "p5", "r5"],
+    ],
+    stacks: { red: 1, yellow: 1 },
+  });
+  const clue = (clue: Clue) => judged(game, { type: "clue", target: BOB, clue });
+
+  it("rank a misread that gets a card misplayed below one that only misleads", () => {
+    const yellow = clue({ kind: "color", value: "yellow" });
+    const three = clue({ kind: "rank", value: 3 });
+    expect(yellow).toMatchObject({
+      category: "violates",
+      reasons: [{}, { text: "It would get the yellow 3 played, which won't play." }],
+    });
+    expect(three).toMatchObject({
+      category: "violates",
+      reasons: [{}, { text: "It would leave the yellow 3 noted as something else." }],
+    });
+    expect(three.score).toBeGreaterThan(yellow.score);
+    expect(yellow.score).toBeLessThanOrEqual(-30);
+  });
+});
+
 describe("finesse clues", () => {
   // beginner/finesse, first example: Bob sees Cathy's r4, so he knows to blind-play.
   it("are permitted when the finessed player can tell they must blind-play", () => {

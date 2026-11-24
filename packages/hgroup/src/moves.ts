@@ -78,7 +78,9 @@ export interface RankedMove {
    * A heuristic that orders moves within one category on this turn, higher first. It is not
    * comparable across turns. Among violations it puts the least harmful first: a clue that gets
    * nothing (a stall), then one that means nothing at the table's level, then discards and clues
-   * that lose or mislead about cards, and last a play that may strike.
+   * that lose or mislead about cards, and last a play that may strike. A violating clue scores by the
+   * harm it does too (`clueHarm`): one that leaves a player a wrong note scores at most -20, one
+   * that gets a card misplayed at most -30, and one that does neither at least -10.
    */
   readonly score: number;
   readonly reasons: readonly Reason[];
@@ -165,6 +167,8 @@ interface Judge {
   readonly isTrash: (card: Card, self: CardId) => boolean;
   /** The card on the next player's chop that must be saved this turn, if any (`urgentSave`). */
   readonly urgent: CardId | null;
+  /** What `seat` knows about each card now, as far as the viewer can tell (`seatKnows`). */
+  readonly knowsNow: (seat: Seat) => readonly Note[];
 }
 
 function judgeFor(view: PlayerView, knowledge: Knowledge): Judge {
@@ -174,7 +178,13 @@ function judgeFor(view: PlayerView, knowledge: Knowledge): Judge {
   const isTrash = trashTest(view, knowledge);
   const mine = privateKnowledge(view, knowledge);
   const judge = { view, knowledge, facts, mine, uses, seen, isTrash };
-  return { ...judge, urgent: urgentSave(judge) };
+  const known = new Map<Seat, readonly Note[]>();
+  const knowsNow = (seat: Seat) => {
+    if (!known.has(seat)) known.set(seat, seatKnows({ view, mine }, knowledge, seat));
+    return known.get(seat)!;
+  };
+  const withKnows = { ...judge, knowsNow };
+  return { ...withKnows, urgent: urgentSave(withKnows) };
 }
 
 /** `Judge.isTrash` on `table`. Bad-touched cards are trash, so they make no other card a copy. */
@@ -397,8 +407,11 @@ function judgeClue(judge: Judge, given: Given): RankedMove {
   const after = advance(view, knowledge, { type: "clue", seat: view.seat, ...given });
   const reading = after.readings.at(-1)!;
   const said = `${clueName(given.clue)} to seat ${given.target}`;
-  const verdict = (category: Category, score: number, reasons: Reason[]) =>
-    move(action, category, score, reasons, reading);
+  const verdict = (category: Category, score: number, reasons: Reason[]) => {
+    if (category !== "violates") return move(action, category, score, reasons, reading);
+    const harm = clueHarm(judge, after, score);
+    return move(action, category, harm.score, [...reasons, ...harm.reasons], reading);
+  };
 
   const live = pending(reading);
   if (live.length === 0) {
@@ -1029,4 +1042,52 @@ function owesPlay(judge: Omit<Judge, "urgent">, knowledge: Knowledge, seat: Seat
       )
     );
   });
+}
+
+/**
+ * A violating clue's score by the harm the viewer can see it doing once given (`after`), from
+ * `score`, what its violation alone is worth: below -30 if it gets a player to play a card that
+ * won't play (a card they now think is playable, or one a prompt or finesse now asks for), -20 or
+ * below if it leaves a player a note that rules out what their card really is, and otherwise no
+ * worse than -10, since a misreading that changes nothing is only a wasted clue. When every clue
+ * violates, such as at the maximum clue tokens, this picks the one that does the least damage.
+ * Never below -39, so a play that may strike still ranks last.
+ */
+function clueHarm(
+  judge: Judge,
+  after: Knowledge,
+  score: number,
+): { score: number; reasons: Reason[] } {
+  const { view, seen } = judge;
+  const { moment } = after;
+  const reading = after.readings.at(-1)!;
+  const misplayed: CardId[] = [];
+  const misled: CardId[] = [];
+  for (const seat of seatsAfter(view.seat, view.config.numPlayers)) {
+    const sight = seatSight(judge, after, seat);
+    const knows = seatKnows(judge, after, seat, sight);
+    const before = judge.knowsNow(seat);
+    const playsNow = (note: Note) =>
+      note.length > 0 && note.every((card) => isPlayable(moment, card));
+    for (const id of moment.hands[seat]!) {
+      const card = seen(id)!;
+      if (couldBe(before[id]!, card) && !couldBe(knows[id]!, card)) misled.push(id);
+      if (isPlayable(moment, card)) continue;
+      const plays =
+        (playsNow(knows[id]!) && !playsNow(before[id]!)) ||
+        owes(sight, after, knows, seat, id, [reading]);
+      if (plays) misplayed.push(id);
+    }
+  }
+  const cards = (ids: CardId[]) => ids.map((id) => `the ${name(seen(id)!)}`).join(" and ");
+  if (misplayed.length > 0) {
+    const text = `It would get ${cards(misplayed)} played, which won't play.`;
+    const worst = Math.min(score, -30) - 5 * misplayed.length - misled.length;
+    return { score: Math.max(-39, worst), reasons: [reason(null, misplayed, text)] };
+  }
+  if (misled.length > 0) {
+    const text = `It would leave ${cards(misled)} noted as something else.`;
+    return { score: Math.min(score, -20) - misled.length, reasons: [reason(null, misled, text)] };
+  }
+  return { score: Math.max(score, -10), reasons: [] };
 }

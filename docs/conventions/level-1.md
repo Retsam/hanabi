@@ -160,6 +160,13 @@ the clues alone say.
 - **Rules out:** the finesse, if that player's next turn is not the blind-play (finesses are urgent).
 - **Limit:** self-finesses (on the receiver) and reverse finesses (on a player after the receiver) are
   level 2, so they are not read at level 1. See [level-2.md](./level-2.md#reverse-finesse) and [`self-finesse`](./level-2.md#self-finesse).
+- **Judgment call:** a clue given at the maximum clue tokens, after the game's first move, is never
+  read as a finesse (or, from level 2, any chain with one), at every level. The giver couldn't
+  discard, so the clue may only be the least bad one they had: in self-play, 2-player 8-clue stalls
+  read as Self-Finesses were the biggest source of strikes from such clues. Prompts are still read,
+  since a prompt at 8 clues is usually real (dropping them too made level 1 self-play strike more).
+  The first move is exempt: nobody has had a chance to discard, and the site's finesse examples start
+  there. The site only covers clues given at 8 clues as a stalling situation at level 9.
 
 ## `finesse-position`
 
@@ -295,7 +302,15 @@ category, then score, then a fixed order: plays, discards, then clues by seat an
 - **Rule:** every clue must get at least one previously unclued card played or saved. A clue that only
   re-touches cards (a Tempo Clue) or only touches trash violates it.
 - **Ranking:** such a clue is still the least harmful violation, so it ranks first among them when a
-  player can't discard (clue tokens are full) and has nothing else to do.
+  player can't discard (clue tokens are full) and has nothing else to do, unless it leaves someone a
+  wrong note (see below).
+- **Judgment call (forced clues):** when every clue violates something, the least harmful one should
+  win, so a violating clue is also scored by what the giver can see it doing to the other players
+  (`clueHarm`): getting a card misplayed (a card someone newly thinks is playable, or one a prompt or
+  finesse asks for, that won't play) scores at most -30, leaving someone a note that rules out what
+  their card really is scores at most -20, and a misread that does neither scores no worse than -10.
+  Self-play found the giver at 8 clues picking a misread that got a card misplayed over one that only
+  left it noted wrong.
 
 ## `early-game`
 

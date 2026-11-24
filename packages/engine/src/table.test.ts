@@ -34,6 +34,23 @@ describe("history", () => {
     expect(moments[2]!.hands[BOB]).not.toContain(y1);
     expect(moments[3]!.discardPile).toEqual([r5]);
     expect(moments[4]!.discardPile).toEqual([r5, y3]);
+    // The clue spends a token and the discard gets it back; the misplay leaves them alone.
+    expect(moments.map((moment) => moment.clueTokens)).toEqual([7, 6, 6, 7, 7]);
+  });
+
+  it("gives a token back for a 5 unless the tokens are full", () => {
+    const start = deal({
+      hands: [
+        ["r5", "y5", "g1", "b1", "p1"],
+        ["r1", "y1", "g2", "b2", "p2"],
+      ],
+      stacks: { red: 4, yellow: 4 },
+      clueTokens: 7,
+    });
+    // Alice plays r5, Bob misplays r1, Alice plays y5 (her second card now that she has drawn).
+    const game = start.play(0).play(0).play(1);
+    expect(game.state.stacks).toMatchObject({ red: 5, yellow: 5 });
+    expect(history(game.state).map((moment) => moment.clueTokens)).toEqual([7, 8, 8, 8]);
   });
 
   it("starts from a scenario's setup, with its clued and discarded cards", () => {

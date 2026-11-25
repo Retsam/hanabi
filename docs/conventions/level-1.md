@@ -143,6 +143,10 @@ the clues alone say.
 - **Judgment call:** knowledge only pins a prompted card down when it is the only candidate. With several,
   each keeps its possibilities. Move ranking makes playing the leftmost one mandated anyway (the site's
   second and fourth examples): the prompt promises the card, and its giver answers for the cards before it.
+- **Giving one:** the needed card need not be the leftmost candidate. The giver may prompt through
+  candidates they see are other cards, as long as each plays now and its holder, having played it, still
+  owes the prompt (the site's fourth example). A holder who would then lose track (an earlier card that
+  completes another reading they can't rule out, say) makes the clue a misread.
 - **Judgment call:** a prompted player who passes their turn does not rule the prompt out. The site only
   calls finesses urgent.
 - **Limit:** one prompt or finesse per clue, on top of any cards that play anyway. A clue that needs two

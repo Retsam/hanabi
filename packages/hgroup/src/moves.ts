@@ -702,8 +702,9 @@ function playOverSave(judge: Judge, clue: ClueCase): Finding | undefined {
 
 /**
  * Whether `interpretation` is the truth as the viewer sees it, once the clue is given (`after`): the
- * focus is the card it says, and every connecting card is where it says (the leftmost candidate,
- * for a prompt).
+ * focus is the card it says, and every connecting card is where it says. A prompted player plays
+ * their candidates left to right, so the card may be a later one when the ones before it play
+ * (`promptedThrough`).
  */
 function isReal(
   judge: Judge,
@@ -725,7 +726,7 @@ function wrongConnection(
 ): { text: string; cards: CardId[] } | undefined {
   for (const connection of interpretation.connections) {
     if (hasPlayed(after.moment, connection.card)) continue;
-    const id = connectingCards(after, connection)[0];
+    const id = promptedThrough(judge, after, connection);
     const { seat } = connection;
     const kind = CONNECTION_NAMES[connection.kind];
     if (id === undefined) {
@@ -746,6 +747,43 @@ function wrongConnection(
     }
   }
   return wrongGotten(judge, after, interpretation);
+}
+
+/**
+ * The candidate `connection` gets its holder to play as its card. That's the leftmost, but a
+ * prompted player who plays a card that turns out to be another one moves on to the next
+ * (beginner/prompt, fourth example): the giver answers for the cards played on the way. So the
+ * viewer looks past a candidate they see is another card when it plays now and its holder, having
+ * played it, still owes the prompt. Undefined if no candidate is left.
+ */
+function promptedThrough(
+  judge: Judge,
+  after: Knowledge,
+  connection: Connection,
+): CardId | undefined {
+  const { seat } = connection;
+  let knowledge = after;
+  for (;;) {
+    const id = connectingCards(knowledge, connection)[0];
+    const card = id === undefined ? null : judge.seen(id);
+    if (
+      id === undefined ||
+      card === null ||
+      connection.kind !== "prompt" ||
+      sameCard(card, connection.card) ||
+      !isPlayable(knowledge.moment, card)
+    ) {
+      return id;
+    }
+    const event = { type: "play", seat, cardId: id, card, success: true, drawn: null } as const;
+    const played = advance(judge.view, knowledge, event);
+    const next = connectingCards(played, connection)[0];
+    const sight = seatSight(judge, played, seat);
+    const known = seatKnows(judge, played, seat, sight);
+    const readings = [played.readings.at(-1)!];
+    if (next === undefined || !owes(sight, played, known, seat, next, readings, false)) return id;
+    knowledge = played;
+  }
 }
 
 /**

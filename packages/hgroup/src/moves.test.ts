@@ -396,6 +396,61 @@ describe("clues", () => {
     });
   });
 
+  // beginner/prompt, fourth example: Bob plays his clued 3s left to right until the r3 turns up,
+  // and the b3 and g3 before it play too, so the giver may prompt through them.
+  it("prompt through earlier candidates that play", () => {
+    const game = deal({
+      hands: [
+        ["y3", "g4", "b4", "p3", "y4"],
+        ["g5", "b3*", "g3*", "r3*", "p4"],
+        ["y5", "b5", "r4", "p5", "y4"],
+      ],
+      stacks: { red: 2, yellow: 1, green: 2, blue: 2, purple: 1 },
+      clueTokens: 6,
+    });
+    const move = judged(game, {
+      type: "clue",
+      target: CATHY,
+      clue: { kind: "color", value: "red" },
+    });
+    expect(move.category).toBe("permitted");
+    expect(conventions(move)).toEqual(["prompt"]);
+  });
+
+  // From a reviewed game (reviews/game-turn37-prompt.json, turn 37): the 5 is the b5 or the p5 to
+  // Bob, both through Cathy's clued 4s. Cathy plays her b4 first, then sees Bob's p5 and plays her
+  // p4 too.
+  const fours = deal({
+    hands: [
+      ["r3", "g1", "y1", "r1", "g2"],
+      ["p5", "g3", "y4", "r2", "b2"],
+      ["y3", "b4*", "r4", "g4", "p4*"],
+    ],
+    stacks: { red: 2, yellow: 2, green: 2, blue: 3, purple: 3 },
+  });
+
+  it("prompt through a clued card that plays before the one they need", () => {
+    const move = judged(fours, { type: "clue", target: BOB, clue: { kind: "rank", value: 5 } });
+    expect(move.category).toBe("permitted");
+    expect(conventions(move)).toEqual(["prompt"]);
+    // Cathy plays the leftmost 4, the b4, and seeing Bob's p5 she still owes the p4.
+    const prompted = fours.clue(BOB, 5).discard(4);
+    expect(ranked(prompted)[0]).toMatchObject({
+      action: { type: "play", cardId: fours.cardAt(1, CATHY) },
+      category: "mandated",
+    });
+    expect(ranked(prompted.play(1), CATHY)[0]).toMatchObject({
+      action: { type: "play", cardId: fours.cardAt(4, CATHY) },
+      category: "mandated",
+    });
+  });
+
+  it("don't prompt through a card that plays when its holder can't tell what to play next", () => {
+    // Cathy's y2 plays, but then she can't tell her 3 from the y3: she wouldn't play the g2.
+    const move = judged(twos, { type: "clue", target: CATHY, clue: { kind: "rank", value: 3 } });
+    expect(move.category).toBe("violates");
+  });
+
   // beginner/minimum-clue-value-principle, the Tempo Clue: re-cluing Bob's 2-saved r2 gets no new card.
   it("violate Minimum Clue Value when they get no new card", () => {
     const game = deal({

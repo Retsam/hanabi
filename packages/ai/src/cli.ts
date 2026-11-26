@@ -22,6 +22,8 @@ Options:
   --games <n>       Games per player count (default 20)
   --seed <n>        Seed of the first game (default 1)
   --level <n>       H-Group level of the table (default 1)
+  --mistakes <p>    Chance per turn, from 0 to 1, that a seat plays one of its next 3 best moves
+                    instead of its best (default 0). Seeded too, so a seed still reproduces a game
   --verbose         Print every move with its category and reasons
   --review          Print each game's review: every move, where it ranked and the next best move
   --help            Show this help`;
@@ -32,6 +34,7 @@ const { values } = parseArgs({
     games: { type: "string", default: "20" },
     seed: { type: "string", default: "1" },
     level: { type: "string", default: "1" },
+    mistakes: { type: "string", default: "0" },
     verbose: { type: "boolean", default: false },
     review: { type: "boolean", default: false },
     help: { type: "boolean", default: false },
@@ -64,12 +67,17 @@ const players = values.players.split(",").map((text) => {
 const games = integer("games", values.games, 1);
 const seed = integer("seed", values.seed, 0);
 const level = integer("level", values.level, 0);
+const mistakeRate = Number(values.mistakes);
+if (!(mistakeRate >= 0 && mistakeRate <= 1)) {
+  fail(`--mistakes must be a number from 0 to 1, not "${values.mistakes}"`);
+}
+const mistakes = { rate: mistakeRate };
 
 for (const numPlayers of players) {
   const results: GameResult[] = [];
   for (let i = 0; i < games; i++) {
     if (!values.verbose && !values.review) {
-      results.push(await selfPlay(numPlayers, seed + i, level));
+      results.push(await selfPlay(numPlayers, seed + i, level, {}, mistakes));
       continue;
     }
     console.log(`\n${numPlayers}p game, seed ${seed + i}`);
@@ -87,6 +95,7 @@ for (const numPlayers of players) {
             },
           }
         : {},
+      mistakes,
     );
     if (values.review) {
       const { states, events } = replay(result.replay);

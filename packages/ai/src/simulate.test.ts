@@ -54,3 +54,19 @@ describe("selfPlay", () => {
     expect(reviews.every((review) => review.rank === 1)).toBe(true);
   });
 });
+
+describe("selfPlay with mistakes", () => {
+  it("sometimes plays a lower-ranked move, and a seed still reproduces the game", async () => {
+    const { replay } = await selfPlay(3, 1, 1, {}, { rate: 0.3 });
+    const ranks = reviewGame(replay, 1).map((review) => review.rank);
+    expect(ranks.some((rank) => rank > 1)).toBe(true);
+    const again = await selfPlay(3, 1, 1, {}, { rate: 0.3 });
+    expect(again.replay.actions).toEqual(replay.actions);
+  });
+
+  it("plays like plain self-play at a rate of 0", async () => {
+    const plain = await selfPlay(3, 1, 1);
+    const none = await selfPlay(3, 1, 1, {}, { rate: 0 });
+    expect(none.replay.actions).toEqual(plain.replay.actions);
+  });
+});

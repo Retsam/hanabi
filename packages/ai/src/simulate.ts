@@ -14,7 +14,7 @@ import {
 import type { Level, RankedMove } from "@hanabi/hgroup";
 import { xoroshiro128plus } from "pure-rand/generator/xoroshiro128plus";
 import { runGame } from "./runner.ts";
-import { hgroupSeat } from "./seat.ts";
+import { hgroupSeat, type Noise } from "./seat.ts";
 
 export type PlayerCount = 2 | 3 | 4 | 5;
 
@@ -37,16 +37,33 @@ export interface Watcher {
   readonly onEvent?: (event: GameEvent, state: GameState) => void;
 }
 
-/** Deals a game for `numPlayers` from `seed` and plays it to the end with H-Group seats at `level`. */
+/**
+ * How often seats play a worse move than their best, for games that test how the engine copes with
+ * mistakes: on each turn, with probability `rate`, one of the next `among` best moves.
+ */
+export interface Mistakes {
+  readonly rate: number;
+  readonly among?: number;
+}
+
+/**
+ * Deals a game for `numPlayers` from `seed` and plays it to the end with H-Group seats at `level`.
+ * With `mistakes`, the seats' slips are drawn from a stream also seeded by `seed`, so a seed still
+ * reproduces the game.
+ */
 export async function selfPlay(
   numPlayers: PlayerCount,
   seed: number,
   level: Level,
   watcher: Watcher = {},
+  mistakes?: Mistakes,
 ): Promise<GameResult> {
   const config = standardConfig(numPlayers);
   const deck = shuffledDeck(config, xoroshiro128plus(seed));
-  const seats = Array.from({ length: numPlayers }, () => hgroupSeat(level, watcher.onChoose));
+  const noise = mistakes && mistakes.rate > 0 ? mistakeNoise(seed, mistakes) : undefined;
+  const seats = Array.from({ length: numPlayers }, () =>
+    hgroupSeat(level, watcher.onChoose, noise),
+  );
   const { state, actions } = await runGame(createGame(config, deck), seats, watcher.onEvent);
   return {
     seed,
@@ -56,6 +73,13 @@ export async function selfPlay(
     replay: { config, deck, actions },
     state,
   };
+}
+
+/** The seats' shared slips for a game: a stream jumped well clear of the deck's shuffle. */
+function mistakeNoise(seed: number, { rate, among = 3 }: Mistakes): Noise {
+  const rng = xoroshiro128plus(seed);
+  rng.jump();
+  return { rate, among, rng };
 }
 
 export interface Summary {
